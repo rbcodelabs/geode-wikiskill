@@ -23,7 +23,7 @@ Build output is written to `dist/`. Install `dist/main.js`, `dist/manifest.json`
 ## Operating model
 
 1. Enable specific project IDs in WikiSkill settings. Default is no consent.
-2. Import a bounded cursor page from Agent Threads.
+2. Stream paged trace sources within the configured event budget, persisting an independent opaque cursor per source.
 3. Compile sanitized evidence into patterns, including counterexamples.
 4. Run versioned Maintainer and Proposer jobs in background Agent Threads.
 5. Evaluate baseline and candidate independently for every public and sealed holdout fixture through `constrainedRuns`, then validate JSON and grade locally.

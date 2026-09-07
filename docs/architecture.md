@@ -27,7 +27,7 @@ Plugin operational state is schema-versioned in `data.json`. Candidate drafts li
 
 Per-source cursor advancement happens only in the same persisted state update as sanitized evidence. Provider-owned revision and content hashes fence every source. Events without source-owned `invokedSkill` attribution are discarded. Candidate and evaluation records bind evidence, canonical skill, PURPOSE, contract, and fixture hashes and carry a terminal `promoted: false`.
 
-The plugin registers a bounded fifteen-minute interval because the Agent Threads cron surface cannot invoke another plugin's callback. Each cycle enforces a daily budget and skill lock, skips an empty import, runs the versioned Maintainer job, applies retention, and persists rendered knowledge.
+The plugin registers a bounded fifteen-minute interval because the Agent Threads cron surface cannot invoke another plugin's callback. Retention runs and persists before dependency and empty-queue checks. Work then shares a persisted UTC-day budget and per-skill lock with manual authoring/evaluation, skips an empty import, and runs the versioned Maintainer job.
 
 ## Contract isolation
 

@@ -1,4 +1,4 @@
-export type Outcome = 'success' | 'failure' | 'unknown';
+export type Outcome = "success" | "failure" | "unknown";
 
 export interface TraceEvent {
   id: string;
@@ -21,7 +21,7 @@ export interface Pattern {
   id: string;
   skill: string;
   action: string;
-  confidence: 'weak' | 'medium' | 'strong';
+  confidence: "weak" | "medium" | "strong";
   evidence: string[];
   counterexamples: string[];
   updatedAt: string;
@@ -36,14 +36,15 @@ export interface Candidate {
   purposeHash?: string;
   contractHash?: string;
   fixtureHashes?: Record<string, string>;
+  rationale?: string;
   createdAt: string;
-  status: 'draft' | 'evaluated' | 'rejected' | 'review';
+  status: "draft" | "evaluated" | "rejected" | "review";
 }
 
 export interface EvaluationRecord {
   id: string;
   candidateId: string;
-  decision: 'reject' | 'review';
+  decision: "reject" | "review";
   baselineScore: number;
   candidateScore: number;
   failures: string[];
@@ -53,5 +54,9 @@ export interface EvaluationRecord {
   contractHash?: string;
   fixtureHashes?: Record<string, string>;
   evidenceHash?: string;
+  baselineResultHash?: string;
+  candidateResultHash?: string;
+  usage?: { inputTokens: number; outputTokens: number; costUsd: number };
+  fixtureOutcomes?: Record<string, { baseline: boolean; candidate: boolean }>;
   createdAt: string;
 }

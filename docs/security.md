@@ -20,4 +20,4 @@ The constrained-run provider must enforce no filesystem, tools, MCP servers, ski
 
 ## Residual risks
 
-Pattern text may still contain identifying context that deterministic redaction cannot recognize. Review packets require human inspection. A future release should add configurable entity detection and retention cleanup after the pilot establishes acceptable false-positive and false-negative rates.
+Pattern text may still contain identifying context that deterministic redaction cannot recognize, so review packets require human inspection. Operational retention removes expired evidence, candidates, and evaluations on every scheduler cycle—including cycles with no import work or a provider failure. Configurable entity detection remains a possible follow-up after the pilot establishes acceptable false-positive and false-negative rates.

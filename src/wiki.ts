@@ -1,8 +1,39 @@
-import type { Candidate, EvaluationRecord, Pattern } from './model';
+import type { Candidate, EvaluationRecord, Pattern } from "./model";
 
-export function renderIndex(patterns: readonly Pattern[]): string { return `# Skill Evolution\n\nGenerated knowledge; review before use.\n\n${patterns.map(p => `- [[${p.skill}/patterns/${p.id}|${p.action}]] — ${p.confidence}`).join('\n')}\n`; }
-export function renderPattern(pattern: Pattern): string { return `# ${inline(pattern.action)}\n\n- Skill: ${inline(pattern.skill)}\n- Confidence: ${pattern.confidence}\n- Evidence: ${pattern.evidence.join(', ') || 'none'}\n- Counterexamples: ${pattern.counterexamples.join(', ') || 'none'}\n- Updated: ${pattern.updatedAt}\n`; }
-export function renderEvolution(candidates: readonly Candidate[]): string { return `# Evolution Log\n\n${candidates.map(c => `- ${c.createdAt} — ${c.id} — ${c.status}`).join('\n')}\n`; }
-export function renderImpact(records: readonly EvaluationRecord[]): string { return `# Impact History\n\n${records.map(r => `- ${r.createdAt} — ${r.decision}: baseline ${r.baselineScore}, candidate ${r.candidateScore}`).join('\n')}\n`; }
-export function renderReview(candidate: Candidate, evaluation: EvaluationRecord): string { return `# Review: ${inline(candidate.id)}\n\nStatus: human review required\n\n## Candidate\n\n${candidate.content.split('\n').map(line => `    ${line}`).join('\n')}\n\n## Evaluation\n\n- Decision: ${evaluation.decision}\n- Baseline: ${evaluation.baselineScore}\n- Candidate: ${evaluation.candidateScore}\n- Automatic promotion: disabled\n`; }
-function inline(value: string): string { return value.replace(/[\r\n]+/g, ' ').replace(/[\[\]#*_`<>]/g, '\\$&').trim(); }
+export function renderIndex(patterns: readonly Pattern[]): string {
+  return `# Skill Evolution\n\nGenerated knowledge; review before use.\n\n${patterns.map((p) => `- [[${segment(p.skill)}/patterns/${segment(p.id)}|${inline(p.action)}]] — ${p.confidence}`).join("\n")}\n`;
+}
+export function renderPattern(pattern: Pattern): string {
+  return `# ${inline(pattern.action)}\n\n- Skill: ${inline(pattern.skill)}\n- Confidence: ${pattern.confidence}\n- Evidence: ${pattern.evidence.join(", ") || "none"}\n- Counterexamples: ${pattern.counterexamples.join(", ") || "none"}\n- Updated: ${pattern.updatedAt}\n`;
+}
+export function renderEvolution(candidates: readonly Candidate[]): string {
+  return `# Evolution Log\n\n${candidates.map((c) => `- ${c.createdAt} — ${c.id} — ${c.status}`).join("\n")}\n`;
+}
+export function renderImpact(records: readonly EvaluationRecord[]): string {
+  return `# Impact History\n\n${records.map((r) => `- ${r.createdAt} — ${r.decision}: baseline ${r.baselineScore}, candidate ${r.candidateScore}`).join("\n")}\n`;
+}
+export function renderReview(
+  candidate: Candidate,
+  evaluation: EvaluationRecord,
+): string {
+  return `# Review: ${inline(candidate.id)}\n\nStatus: human review required\n\n## Candidate\n\n${candidate.content
+    .split("\n")
+    .map((line) => `    ${line}`)
+    .join(
+      "\n",
+    )}\n\n## Evaluation\n\n- Decision: ${evaluation.decision}\n- Baseline: ${evaluation.baselineScore}\n- Candidate: ${evaluation.candidateScore}\n- Automatic promotion: disabled\n`;
+}
+function inline(value: string): string {
+  return value
+    .replace(/[\r\n]+/g, " ")
+    .replace(/[\[\]#*_`<>]/g, "\\$&")
+    .trim();
+}
+function segment(value: string): string {
+  return (
+    value
+      .replace(/[^a-zA-Z0-9._-]/g, "-")
+      .replace(/^\.+$/, "item")
+      .slice(0, 100) || "item"
+  );
+}

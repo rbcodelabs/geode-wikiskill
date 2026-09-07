@@ -1,13 +1,39 @@
 export class BudgetScheduler {
   private locks = new Set<string>();
-  private used = 0;
-  private budgetDay = '';
-  constructor(private readonly dailyBudget: number, private readonly now: () => Date = () => new Date()) {}
-  async run<T>(scope: string, estimatedTokens: number, work: () => Promise<T | undefined>): Promise<{ status: 'complete' | 'skipped'; value?: T }> {
-    const today = this.now().toISOString().slice(0, 10); if (today !== this.budgetDay) { this.budgetDay = today; this.used = 0; }
-    if (this.locks.has(scope) || this.used + estimatedTokens > this.dailyBudget) return { status: 'skipped' };
+  constructor(
+    private readonly dailyBudget: number,
+    private readonly budget: { utcDay: string; usedTokens: number } = {
+      utcDay: "",
+      usedTokens: 0,
+    },
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+  async run<T>(
+    scope: string,
+    estimatedTokens: number,
+    work: () => Promise<T | undefined>,
+  ): Promise<{ status: "complete" | "skipped"; value?: T }> {
+    const today = this.now().toISOString().slice(0, 10);
+    if (today !== this.budget.utcDay) {
+      this.budget.utcDay = today;
+      this.budget.usedTokens = 0;
+    }
+    if (
+      this.locks.has(scope) ||
+      this.budget.usedTokens + estimatedTokens > this.dailyBudget
+    )
+      return { status: "skipped" };
     this.locks.add(scope);
-    try { const value = await work(); if (value === undefined) return { status: 'skipped' }; this.used += estimatedTokens; return { status: 'complete', value }; }
-    finally { this.locks.delete(scope); }
+    this.budget.usedTokens += estimatedTokens;
+    try {
+      const value = await work();
+      if (value === undefined) {
+        this.budget.usedTokens -= estimatedTokens;
+        return { status: "skipped" };
+      }
+      return { status: "complete", value };
+    } finally {
+      this.locks.delete(scope);
+    }
   }
 }
