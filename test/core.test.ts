@@ -64,6 +64,13 @@ describe('playbook and scheduling boundaries', () => {
     expect((await scheduler.run('skill', 5, async () => undefined)).status).toBe('skipped');
     expect((await scheduler.run('skill', 11, async () => 'never')).status).toBe('skipped');
   });
+  it('resets the scheduler budget on the next UTC day', async () => {
+    let now = new Date('2026-09-07T12:00:00Z'); const scheduler = new BudgetScheduler(5, () => now);
+    expect((await scheduler.run('a', 5, async () => true)).status).toBe('complete');
+    expect((await scheduler.run('b', 1, async () => true)).status).toBe('skipped');
+    now = new Date('2026-09-08T12:00:00Z');
+    expect((await scheduler.run('b', 1, async () => true)).status).toBe('complete');
+  });
 });
 
 describe('dashboard', () => {

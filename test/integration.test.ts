@@ -51,7 +51,7 @@ describe('vertical pilot', () => {
   });
 
   it('prepares independent checkpoints for every eligible source without mutating caller state', async () => {
-    const api = new FakeThreadsApi({ sourceCount: 2 });
+    const api = new FakeThreadsApi({ sourceCount: 2, sourcePageSize: 1 });
     const adapter = new ThreadsAdapter(() => ({ api: { v1: api } }), new EventTarget());
     adapter.start();
     const importer = new TraceImporter(adapter, new Set(['project-1']), []);

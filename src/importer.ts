@@ -8,8 +8,9 @@ export class TraceImporter {
   constructor(private readonly adapter: ThreadsAdapter, private readonly consent: ReadonlySet<string>, private readonly secrets: readonly string[], cursor?: string, private readonly expectedRevision?: string) { this.cursor = cursor; this.sourceRevision = expectedRevision; }
 
   async importNext(limit = 100): Promise<{ events: TraceEvent[]; cursor: string; redactions: number }> {
+    limit = Math.max(1, Math.min(500, Math.floor(limit)));
     const api = this.adapter.requireApi();
-    const sources = await api.traces.listSources();
+    const sources = await this.listSources();
     const source = sources.find(item => Boolean(item.projectId && this.consent.has(item.projectId)));
     if (!source) return { events: [], cursor: this.cursor ?? '', redactions: 0 };
     if (this.cursor && this.expectedRevision && source.revision !== this.expectedRevision) throw new Error('Trace source revision changed; reset or reconcile the import cursor');
@@ -40,11 +41,12 @@ export class TraceImporter {
   }
 
   async prepareBatch(checkpoints: Readonly<Record<string, { cursor?: string; revision: string; contentHash: string; complete: boolean }>>, maxEvents = 100): Promise<{ events: TraceEvent[]; checkpoints: Record<string, { cursor?: string; revision: string; contentHash: string; complete: boolean }>; redactions: number }> {
+    maxEvents = Math.max(1, Math.min(500, Math.floor(maxEvents)));
     const api = this.adapter.requireApi();
     const next = structuredClone(checkpoints) as Record<string, { cursor?: string; revision: string; contentHash: string; complete: boolean }>;
     const events: TraceEvent[] = [];
     let redactions = 0;
-    const sources = (await api.traces.listSources()).filter(source => Boolean(source.projectId && this.consent.has(source.projectId)));
+    const sources = (await this.listSources()).filter(source => Boolean(source.projectId && this.consent.has(source.projectId)));
     for (const source of sources) {
       if (events.length >= maxEvents) break;
       const checkpoint = checkpoints[source.sourceId];
@@ -71,6 +73,7 @@ export class TraceImporter {
     }
     return { events: output, redactions };
   }
+  private async listSources(): Promise<readonly import('./threads-contract').TraceSource[]> { const api = this.adapter.requireApi(); const sources: import('./threads-contract').TraceSource[] = []; let cursor: string | undefined; const seen = new Set<string>(); do { const page = await api.traces.listSources({ cursor, limit: 100 }); sources.push(...page.sources); if (page.eof) break; if (!page.nextCursor || seen.has(page.nextCursor)) throw new Error('Trace source pagination did not advance'); seen.add(page.nextCursor); cursor = page.nextCursor; } while (true); return sources; }
 }
 
 function record(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}; }
