@@ -25,8 +25,10 @@ The Threads adapter is a soft dependency. It registers lifecycle listeners befor
 
 Plugin operational state is schema-versioned in `data.json`. Candidate drafts live only there and in explicit review packets, outside active skill roots. Knowledge is rendered under `Agent Knowledge/Skill Evolution/`, with pattern notes, an evolution log, impact history, and review packets.
 
-Cursor advancement happens after eligibility filtering and sanitization. A source revision is retained for provenance. Candidate evaluation records carry a terminal `promoted: false`; promotion is deliberately absent from the plugin contract.
+Per-source cursor advancement happens only in the same persisted state update as sanitized evidence. Provider-owned revision and content hashes fence every source. Events without source-owned `invokedSkill` attribution are discarded. Candidate and evaluation records bind evidence, canonical skill, PURPOSE, contract, and fixture hashes and carry a terminal `promoted: false`.
+
+The plugin registers a bounded fifteen-minute interval because the Agent Threads cron surface cannot invoke another plugin's callback. Each cycle enforces a daily budget and skill lock, skips an empty import, runs the versioned Maintainer job, applies retention, and persists rendered knowledge.
 
 ## Contract isolation
 
-`src/threads-contract.ts` is the only provider wire contract and `src/threads-adapter.ts` owns discovery/lifecycle behavior. Contract alignment with Agent Threads does not leak provider implementation types through the compiler, evaluator, UI, or state models.
+`src/threads-contract.ts` pins the consumed subset of Agent Threads `api/public-api-v1.d.ts` (attribution/content-hash contract `c0b4bd1`) and `src/threads-adapter.ts` owns discovery/lifecycle behavior. Contract alignment does not leak provider implementation types through the compiler, evaluator, UI, or state models.

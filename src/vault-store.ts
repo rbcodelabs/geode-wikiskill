@@ -6,6 +6,7 @@ export class VaultWikiStore {
   constructor(private readonly vault: Vault) {}
   async write(state: PluginState): Promise<void> {
     const root = normalizePath(state.settings.outputRoot);
+    if (!root || root.startsWith('/') || root.split('/').includes('..')) throw new Error('Knowledge output folder must be a vault-relative contained path');
     await this.put(`${root}/index.md`, renderIndex(state.patterns));
     for (const pattern of state.patterns) await this.put(`${root}/${pattern.skill}/patterns/${pattern.id}.md`, renderPattern(pattern));
     for (const skill of new Set([...state.patterns.map(p => p.skill), ...state.candidates.map(c => c.skill)])) {

@@ -1,8 +1,8 @@
 /** Pinned structural subset of Agent Threads public API v1. */
 export interface PublicUsage { readonly inputTokens: number; readonly outputTokens: number; readonly costUsd: number; readonly durationMs?: number; readonly turns?: number }
-export interface TraceSource { readonly sourceId: string; readonly threadId: string; readonly projectId?: string; readonly harness: 'claude' | 'codex'; readonly revision: string; readonly updatedAt: number }
-export interface ProviderTraceEvent { readonly index: number; readonly timestamp: string; readonly type: string; readonly data: unknown }
-export interface TraceChunk { readonly sourceId: string; readonly revision: string; readonly cursor?: string; readonly nextCursor?: string; readonly eof: boolean; readonly events: readonly ProviderTraceEvent[] }
+export interface TraceSource { readonly sourceId: string; readonly threadId: string; readonly projectId?: string; readonly harness: 'claude' | 'codex'; readonly revision: string; readonly contentHash: string; readonly updatedAt: number }
+export interface ProviderTraceEvent { readonly index: number; readonly timestamp: string; readonly type: string; readonly invokedSkill?: string; readonly data: unknown }
+export interface TraceChunk { readonly sourceId: string; readonly revision: string; readonly contentHash: string; readonly cursor?: string; readonly nextCursor?: string; readonly eof: boolean; readonly events: readonly ProviderTraceEvent[] }
 export type RunResult = { readonly status: 'completed'; readonly runId: string; readonly threadId: string; readonly finalMessage?: { readonly content: string }; readonly usage?: PublicUsage } | { readonly status: 'failed'; readonly runId: string; readonly threadId: string; readonly error: { readonly code: string; readonly message: string } } | { readonly status: 'timed_out'; readonly runId: string; readonly threadId: string };
 export type ConstrainedRunResult = { readonly status: 'running'; readonly runId: string } | { readonly status: 'completed'; readonly runId: string; readonly output: string; readonly model: string; readonly usage: PublicUsage } | { readonly status: 'failed' | 'cancelled'; readonly runId: string; readonly error: { readonly code: string; readonly message: string } };
 export interface ThreadsApiV1 {

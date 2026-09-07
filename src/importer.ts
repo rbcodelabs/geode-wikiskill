@@ -17,12 +17,13 @@ export class TraceImporter {
     const output: TraceEvent[] = [];
     let redactions = 0;
     for (const event of chunk.events) {
+      if (!event.invokedSkill) continue;
       const data = record(event.data);
       const derived: TraceEvent = {
         id: `${source.sourceId}:${event.index}`,
         origin: stringField(data, 'origin'),
         projectId: source.projectId,
-        skill: stringField(data, 'skill') ?? stringField(data, 'invokedSkill'),
+        skill: event.invokedSkill,
         text: typeof event.data === 'string' ? event.data : JSON.stringify(event.data),
         outcome: outcomeField(data)
       };
@@ -38,21 +39,22 @@ export class TraceImporter {
     return { events: output, cursor: this.cursor, redactions };
   }
 
-  async prepareBatch(checkpoints: Readonly<Record<string, { cursor?: string; revision: string; complete: boolean }>>, maxEvents = 100): Promise<{ events: TraceEvent[]; checkpoints: Record<string, { cursor?: string; revision: string; complete: boolean }>; redactions: number }> {
+  async prepareBatch(checkpoints: Readonly<Record<string, { cursor?: string; revision: string; contentHash: string; complete: boolean }>>, maxEvents = 100): Promise<{ events: TraceEvent[]; checkpoints: Record<string, { cursor?: string; revision: string; contentHash: string; complete: boolean }>; redactions: number }> {
     const api = this.adapter.requireApi();
-    const next = structuredClone(checkpoints) as Record<string, { cursor?: string; revision: string; complete: boolean }>;
+    const next = structuredClone(checkpoints) as Record<string, { cursor?: string; revision: string; contentHash: string; complete: boolean }>;
     const events: TraceEvent[] = [];
     let redactions = 0;
     const sources = (await api.traces.listSources()).filter(source => Boolean(source.projectId && this.consent.has(source.projectId)));
     for (const source of sources) {
       if (events.length >= maxEvents) break;
       const checkpoint = checkpoints[source.sourceId];
-      if (checkpoint?.complete && checkpoint.revision === source.revision) continue;
-      if (checkpoint && checkpoint.revision !== source.revision) throw new Error(`Trace source revision changed for ${source.sourceId}; reset or reconcile its cursor`);
+      if (checkpoint?.complete && checkpoint.revision === source.revision && checkpoint.contentHash === source.contentHash) continue;
+      if (checkpoint && (checkpoint.revision !== source.revision || checkpoint.contentHash !== source.contentHash)) throw new Error(`Trace source revision or content hash changed for ${source.sourceId}; reset or reconcile its cursor`);
       const chunk = await api.traces.readChunk(source.sourceId, { cursor: checkpoint?.cursor, limit: maxEvents - events.length });
       const converted = this.convert(source.sourceId, source.projectId, chunk.events);
       events.push(...converted.events); redactions += converted.redactions;
-      next[source.sourceId] = { cursor: chunk.nextCursor, revision: chunk.revision, complete: chunk.eof };
+      if (chunk.contentHash !== source.contentHash) throw new Error(`Trace content hash changed while reading ${source.sourceId}`);
+      next[source.sourceId] = { cursor: chunk.nextCursor, revision: chunk.revision, contentHash: chunk.contentHash, complete: chunk.eof };
     }
     // `next` is a proposal. The caller atomically persists it with derived evidence.
     return { events, checkpoints: next, redactions };
@@ -62,7 +64,8 @@ export class TraceImporter {
     const output: TraceEvent[] = []; let redactions = 0;
     for (const event of events) {
       const data = record(event.data);
-      const derived: TraceEvent = { id: `${sourceId}:${event.index}`, origin: stringField(data, 'origin'), projectId, skill: stringField(data, 'skill') ?? stringField(data, 'invokedSkill') ?? 'integration-routing', text: typeof event.data === 'string' ? event.data : JSON.stringify(event.data), outcome: outcomeField(data, event.type) };
+      if (!event.invokedSkill) continue;
+      const derived: TraceEvent = { id: `${sourceId}:${event.index}`, origin: stringField(data, 'origin'), projectId, skill: event.invokedSkill, text: typeof event.data === 'string' ? event.data : JSON.stringify(event.data), outcome: outcomeField(data, event.type) };
       if (!eligibleTrace(derived, this.consent)) continue;
       const redacted = redactTrace(derived.text, this.secrets); redactions += redacted.redactions; output.push({ ...derived, text: redacted.text });
     }

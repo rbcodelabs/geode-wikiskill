@@ -25,8 +25,8 @@ Build output is written to `dist/`. Install `dist/main.js`, `dist/manifest.json`
 1. Enable specific project IDs in WikiSkill settings. Default is no consent.
 2. Import a bounded cursor page from Agent Threads.
 3. Compile sanitized evidence into patterns, including counterexamples.
-4. Ask a background Agent Thread for one structured candidate.
-5. Evaluate baseline and candidate independently through `constrainedRuns`.
+4. Run versioned Maintainer and Proposer jobs in background Agent Threads.
+5. Evaluate baseline and candidate independently for every public and sealed holdout fixture through `constrainedRuns`, then validate JSON and grade locally.
 6. Export a review packet. A human separately decides whether to change the canonical Playbook.
 
 See [Architecture](docs/architecture.md) and [Security model](docs/security.md).

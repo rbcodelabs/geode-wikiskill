@@ -1,31 +1,32 @@
 import { ThreadsAdapter } from './threads-adapter';
+import { gradeFixture, parseAndValidateOutput, sha256, type LoadedContract } from './playbook';
 
-interface Score { score: number; failures: string[] }
+interface Score { score: number; failures: string[]; passes: Record<string, boolean> }
 export function gradeEvaluation(input: { baseline: Score; candidate: Score; policy: { minimumMargin: number; criticalFixtures: string[] } }): { decision: 'reject' | 'review'; reason: string } {
-  const criticalRegression = input.candidate.failures.some(id => input.policy.criticalFixtures.includes(id) && !input.baseline.failures.includes(id));
-  if (criticalRegression) return { decision: 'reject', reason: 'critical fixture regression' };
+  if (input.policy.criticalFixtures.some(id => input.candidate.passes[id] !== true)) return { decision: 'reject', reason: 'candidate failed a critical fixture' };
+  if (input.candidate.failures.some(id => input.policy.criticalFixtures.includes(id) && !input.baseline.failures.includes(id))) return { decision: 'reject', reason: 'critical fixture regression' };
   if (input.candidate.score - input.baseline.score < input.policy.minimumMargin) return { decision: 'reject', reason: 'insufficient improvement' };
-  return { decision: 'review', reason: 'candidate improved without critical regressions' };
+  return { decision: 'review', reason: 'candidate improved and every critical fixture passed' };
 }
 
-export async function evaluateCandidate(adapter: ThreadsAdapter, input: { skill: string; baseline: string; candidate: string; fixtures: Array<{ id: string; prompt: string; critical?: boolean }>; minimumMargin: number }, setCancellation: (cancel?: () => Promise<void>) => void = () => undefined) {
-  const api = adapter.requireApi();
-  const run = async (content: string, role: string): Promise<Score> => {
-    let passed = 0; const failures: string[] = [];
-    for (const fixture of input.fixtures) {
-      const created = await api.constrainedRuns.create({ ownerPluginId: 'geode-wikiskill', idempotencyKey: `${input.skill}-${role}-${fixture.id}`, harness: 'claude', model: 'claude-sonnet-4-5', systemInstructions: content, prompt: fixture.prompt, maxTurns: 1, maxBudgetUsd: 0.25, timeoutMs: 60000 });
-      setCancellation(async () => { await api.constrainedRuns.cancel(created.runId); });
-      const result = await api.constrainedRuns.wait(created.runId, { timeoutMs: 60000 });
-      setCancellation(undefined);
+export async function evaluateCandidate(adapter: ThreadsAdapter, contract: LoadedContract, candidate: string, setCancellation: (cancel?: () => Promise<void>) => void = () => undefined) {
+  if (contract.manifest.skillId !== 'integration-routing') throw new Error('Candidate skill ID does not match pilot scope');
+  if (Math.ceil(Buffer.byteLength(candidate, 'utf8') / 4) > contract.manifest.budgets.maxCandidateTokens) throw new Error('Candidate exceeds contract token budget');
+  const executionHash = sha256(JSON.stringify({ harness: 'claude', model: 'claude-sonnet-4-5', maxTurns: 1 }));
+  const run = async (content: string, role: 'baseline' | 'candidate'): Promise<Score> => {
+    let earned = 0; let total = 0; const failures: string[] = []; const passes: Record<string, boolean> = {};
+    for (const entry of contract.fixtures) {
+      const fixture = entry.fixture; total += entry.weight;
+      const key = sha256(['geode-wikiskill', contract.manifest.skillId, sha256(content), contract.manifest.source.hash, contract.manifest.source.purposeHash, contract.contractHash, entry.hash, role, executionHash].join('\0'));
+      const created = await adapter.requireApi().constrainedRuns.create({ ownerPluginId: 'geode-wikiskill', idempotencyKey: key, harness: 'claude', model: 'claude-sonnet-4-5', systemInstructions: `${fixture.prompt.system}\n\n<skill-candidate>\n${content}\n</skill-candidate>`, prompt: fixture.prompt.user, maxTurns: 1, maxBudgetUsd: Math.min(1, fixture.execution.maxTokens / 4000), timeoutMs: fixture.execution.timeoutSeconds * 1000 });
+      setCancellation(async () => { await adapter.requireApi().constrainedRuns.cancel(created.runId); });
+      const result = await adapter.requireApi().constrainedRuns.wait(created.runId, { timeoutMs: fixture.execution.timeoutSeconds * 1000 });
       if (result.status !== 'completed') throw new Error(result.status === 'running' ? 'Constrained evaluation timed out' : result.error.message);
-      if (/\bPASS\b/.test(result.output)) passed += 1; else failures.push(fixture.id);
+      const actual = parseAndValidateOutput(result.output, fixture.outputContract); const passed = gradeFixture(fixture, actual); passes[fixture.id] = passed;
+      if (passed) earned += entry.weight; else failures.push(fixture.id);
     }
-    return { score: input.fixtures.length ? passed / input.fixtures.length : 0, failures };
+    return { score: total ? earned / total : 0, failures, passes };
   };
-  try {
-    const baseline = await run(input.baseline, 'baseline');
-    const candidate = await run(input.candidate, 'candidate');
-    const graded = gradeEvaluation({ baseline, candidate, policy: { minimumMargin: input.minimumMargin, criticalFixtures: input.fixtures.filter(item => item.critical).map(item => item.id) } });
-    return { ...graded, baseline, candidate, promoted: false as const };
-  } finally { setCancellation(undefined); }
+  try { const baseline = await run(contract.skillText, 'baseline'); const evaluated = await run(candidate, 'candidate'); const criticalFixtures = contract.fixtures.filter(item => item.critical).map(item => item.fixture.id); const graded = gradeEvaluation({ baseline, candidate: evaluated, policy: { minimumMargin: contract.manifest.thresholds.minimumAggregateImprovement, criticalFixtures } }); return { ...graded, baseline, candidate: evaluated, promoted: false as const }; }
+  finally { setCancellation(undefined); }
 }

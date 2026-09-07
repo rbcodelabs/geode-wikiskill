@@ -14,6 +14,7 @@ export interface Evidence {
   skill: string;
   action: string;
   outcome: Outcome;
+  importedAt?: string;
 }
 
 export interface Pattern {
@@ -31,6 +32,10 @@ export interface Candidate {
   skill: string;
   content: string;
   sourceHash?: string;
+  evidenceHash?: string;
+  purposeHash?: string;
+  contractHash?: string;
+  fixtureHashes?: Record<string, string>;
   createdAt: string;
   status: 'draft' | 'evaluated' | 'rejected' | 'review';
 }
@@ -43,5 +48,10 @@ export interface EvaluationRecord {
   candidateScore: number;
   failures: string[];
   promoted: false;
+  canonicalSkillHash?: string;
+  purposeHash?: string;
+  contractHash?: string;
+  fixtureHashes?: Record<string, string>;
+  evidenceHash?: string;
   createdAt: string;
 }

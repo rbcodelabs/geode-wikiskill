@@ -24,7 +24,9 @@ describe('vertical pilot', () => {
     const queue = new JobQueue(adapter);
     const candidate = await queue.propose('integration-routing', 'Use the evidence');
     expect(candidate.content).toContain('candidate');
-    const result = await evaluateCandidate(adapter, { skill: 'integration-routing', baseline: 'base', candidate: candidate.content, fixtures: [{ id: 'route', prompt: 'route' }], minimumMargin: 0.1 });
+    const fixture = { version: 1 as const, id: 'route', prompt: { system: 'Return JSON', user: 'route' }, execution: { mode: 'constrained-run-v1' as const, maxTurns: 1 as const, maxTokens: 100, timeoutSeconds: 30, tools: [] as [], skills: [] as [], filesystem: 'none' as const }, outputContract: { type: 'object', additionalProperties: false, required: ['ok'], properties: { ok: { type: 'boolean' } } }, grader: 'deep-equal' as const, expected: { ok: true } };
+    const contract = { root: '/tmp', manifest: { version: 1 as const, skillId: 'integration-routing', source: { path: 'SKILL.md', hash: 'source-hash', revision: 'revision', purposePath: 'PURPOSE.md', purposeHash: 'purpose-hash' }, budgets: { maxCandidateTokens: 1000, maxEvaluationSeconds: 60 }, thresholds: { minimumAggregateImprovement: 0.1, requireNoCriticalRegression: true }, fixtures: [] }, fixtures: [{ fixture, hash: 'fixture-hash', visibility: 'public' as const, critical: true, weight: 1 }], skillText: 'base', purposeText: 'purpose', contractHash: 'contract-hash' };
+    const result = await evaluateCandidate(adapter, contract, candidate.content);
     expect(result.decision).toBe('review');
     expect(result.promoted).toBe(false);
   });
@@ -57,7 +59,7 @@ describe('vertical pilot', () => {
     const batch = await importer.prepareBatch(before, 10);
     expect(batch.events.map(event => event.id)).toEqual(['source-1:0', 'source-2:0']);
     expect(Object.keys(batch.checkpoints)).toEqual(['source-1', 'source-2']);
-    expect(batch.checkpoints['source-1']).toEqual({ cursor: '2', revision: 'hash-1', complete: false });
+    expect(batch.checkpoints['source-1']).toEqual({ cursor: '2', revision: 'hash-1', contentHash: 'content-1', complete: false });
     expect(before).toEqual({});
   });
 

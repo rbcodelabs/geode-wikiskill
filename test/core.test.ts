@@ -3,7 +3,7 @@ import { compilePatterns } from '../src/compiler';
 import { eligibleTrace, redactTrace } from '../src/privacy';
 import { gradeEvaluation } from '../src/evaluation';
 import { defaultState, migrateState } from '../src/state';
-import { assertCurrentSource, validateManifest } from '../src/playbook';
+import { gradeFixture, parseAndValidateOutput } from '../src/playbook';
 import { BudgetScheduler } from '../src/scheduler';
 import { renderDashboard } from '../src/dashboard';
 
@@ -36,9 +36,9 @@ describe('compiler', () => {
 describe('governance', () => {
   it('rejects no-op and harmful candidates and accepts a beneficial candidate', () => {
     const policy = { minimumMargin: 0.1, criticalFixtures: ['safety'] };
-    expect(gradeEvaluation({ baseline: { score: 0.8, failures: [] }, candidate: { score: 0.8, failures: [] }, policy }).decision).toBe('reject');
-    expect(gradeEvaluation({ baseline: { score: 0.8, failures: [] }, candidate: { score: 0.95, failures: ['safety'] }, policy }).decision).toBe('reject');
-    expect(gradeEvaluation({ baseline: { score: 0.8, failures: [] }, candidate: { score: 0.95, failures: [] }, policy }).decision).toBe('review');
+    expect(gradeEvaluation({ baseline: { score: 0.8, failures: [], passes: { safety: true } }, candidate: { score: 0.8, failures: [], passes: { safety: true } }, policy }).decision).toBe('reject');
+    expect(gradeEvaluation({ baseline: { score: 0.8, failures: [], passes: { safety: true } }, candidate: { score: 0.95, failures: ['safety'], passes: { safety: false } }, policy }).decision).toBe('reject');
+    expect(gradeEvaluation({ baseline: { score: 0.8, failures: [], passes: { safety: true } }, candidate: { score: 0.95, failures: [], passes: { safety: true } }, policy }).decision).toBe('review');
   });
 });
 
@@ -52,9 +52,12 @@ describe('state', () => {
 });
 
 describe('playbook and scheduling boundaries', () => {
-  it('rejects malformed and stale contracts', () => {
-    expect(() => validateManifest({ schemaVersion: 1 })).toThrow(/invalid/i);
-    expect(() => assertCurrentSource('old', 'new')).toThrow(/stale/i);
+  it('rejects non-JSON and additional output properties, then grades valid output locally', () => {
+    const schema = { type: 'object', additionalProperties: false, required: ['status'], properties: { status: { const: 'blocked' } } };
+    expect(() => parseAndValidateOutput('PASS', schema)).toThrow(/JSON/);
+    expect(() => parseAndValidateOutput('{"status":"blocked","extra":true}', schema)).toThrow(/closed schema/);
+    const fixture = { version: 1 as const, id: 'f', prompt: { system: 's', user: 'u' }, execution: { mode: 'constrained-run-v1' as const, maxTurns: 1 as const, maxTokens: 10, timeoutSeconds: 10, tools: [] as [], skills: [] as [], filesystem: 'none' as const }, outputContract: schema, grader: 'deep-equal' as const, expected: { status: 'blocked' } };
+    expect(gradeFixture(fixture, { status: 'blocked' })).toBe(true);
   });
   it('skips empty work and enforces a daily budget', async () => {
     const scheduler = new BudgetScheduler(10);

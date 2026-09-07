@@ -18,12 +18,6 @@ export function compilePatterns(items: readonly Evidence[], now = new Date().toI
       evidence: successes.map(item => item.id), counterexamples: failures.map(item => item.id), updatedAt: now
     });
   }
-  // Failed approaches remain first-class counterevidence instead of disappearing from the wiki.
-  const bySkill = new Map(patterns.map(pattern => [pattern.skill, pattern]));
-  for (const item of items.filter(item => item.outcome === 'failure')) {
-    const pattern = bySkill.get(item.skill);
-    if (pattern && !pattern.counterexamples.includes(item.id)) pattern.counterexamples.push(item.id);
-  }
   return patterns.sort((a, b) => b.evidence.length - a.evidence.length);
 }
 
