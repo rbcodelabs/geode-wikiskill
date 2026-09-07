@@ -139,3 +139,20 @@ export function wireDashboardControls(
         ?.scrollIntoView({ behavior: "smooth", block: "start" }),
     );
 }
+export class WikiSkillDashboardController {
+  constructor(private readonly target: DashboardActionTarget) {}
+  mount(root: HTMLElement, model: DashboardModel): void {
+    root.innerHTML = renderDashboard(model);
+    wireDashboardControls(
+      root,
+      (action) => void dispatchDashboardAction(this.target, action),
+    );
+  }
+}
+export async function persistReviewPackets(
+  saveData: () => Promise<void>,
+  exportPackets: () => Promise<void>,
+): Promise<void> {
+  await saveData();
+  await exportPackets();
+}

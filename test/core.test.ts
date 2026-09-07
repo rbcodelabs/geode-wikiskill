@@ -6,9 +6,9 @@ import { defaultState, migrateState } from "../src/state";
 import { gradeFixture, parseAndValidateOutput } from "../src/playbook";
 import { BudgetScheduler } from "../src/scheduler";
 import {
-  dispatchDashboardAction,
+  persistReviewPackets,
   renderDashboard,
-  wireDashboardControls,
+  WikiSkillDashboardController,
 } from "../src/dashboard";
 import { JSDOM } from "jsdom";
 import { renderReview } from "../src/wiki";
@@ -249,6 +249,37 @@ describe("playbook and scheduling boundaries", () => {
     expect(saved).toEqual([5, 0]);
     expect(budget.usedTokens).toBe(0);
   });
+  it("rolls back a rejected reservation save and releases the scope lock", async () => {
+    const budget = { utcDay: "2026-09-07", usedTokens: 0 };
+    let reject = true,
+      workCalls = 0;
+    const scheduler = new BudgetScheduler(
+      10,
+      budget,
+      () => new Date("2026-09-07T00:00:00Z"),
+      async () => {
+        if (reject) throw new Error("save failed");
+      },
+    );
+    await expect(
+      scheduler.run("skill", 5, async () => {
+        workCalls += 1;
+        return true;
+      }),
+    ).rejects.toThrow("save failed");
+    expect(budget.usedTokens).toBe(0);
+    expect(workCalls).toBe(0);
+    reject = false;
+    expect(
+      (
+        await scheduler.run("skill", 5, async () => {
+          workCalls += 1;
+          return true;
+        })
+      ).status,
+    ).toBe("complete");
+    expect(workCalls).toBe(1);
+  });
 });
 
 describe("dashboard", () => {
@@ -299,7 +330,8 @@ describe("dashboard", () => {
         },
       }),
     );
-    let persisted = 0;
+    let saved = 0,
+      exported = 0;
     const noop = async () => undefined;
     const target = {
       importEvidence: noop,
@@ -309,12 +341,32 @@ describe("dashboard", () => {
       cancel: noop,
       retry: noop,
       exportReviewPackets: async () => {
-        persisted += 1;
+        await persistReviewPackets(
+          async () => {
+            saved += 1;
+          },
+          async () => {
+            exported += 1;
+          },
+        );
       },
     };
-    wireDashboardControls(
+    new WikiSkillDashboardController(target).mount(
       dom.window.document.body as unknown as HTMLElement,
-      (action) => void dispatchDashboardAction(target, action),
+      {
+        status: "full",
+        imported: 0,
+        redactions: 7,
+        patterns: [],
+        candidates: [],
+        evaluations: [],
+        importProgress: {
+          scannedSources: 0,
+          scannedBytes: 0,
+          importedEvents: 0,
+          redactions: 7,
+        },
+      },
     );
     (
       dom.window.document.querySelector(
@@ -322,7 +374,8 @@ describe("dashboard", () => {
       ) as HTMLElement
     ).click();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(persisted).toBe(1);
+    expect(saved).toBe(1);
+    expect(exported).toBe(1);
     expect(dom.window.document.body.textContent).toContain("7 redactions");
   });
   it("renders persisted redaction totals after state reload", () => {

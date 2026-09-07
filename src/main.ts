@@ -10,8 +10,8 @@ import {
 import { compilePatterns } from "./compiler";
 import {
   dispatchDashboardAction,
-  renderDashboard,
-  wireDashboardControls,
+  persistReviewPackets,
+  WikiSkillDashboardController,
   type DashboardModel,
 } from "./dashboard";
 import { TraceImporter } from "./importer";
@@ -87,7 +87,7 @@ export default class WikiSkillPlugin extends Plugin {
         new WikiSkillView(
           leaf,
           () => this.dashboardModel(),
-          (action) => void this.handleAction(action),
+          new WikiSkillDashboardController(this),
         ),
     );
     this.addRibbonIcon(
@@ -535,7 +535,11 @@ export default class WikiSkillPlugin extends Plugin {
     await dispatchDashboardAction(this, action);
   }
   async exportReviewPackets(): Promise<void> {
-    await this.persist();
+    await persistReviewPackets(
+      () => this.saveData(this.state),
+      () => new VaultWikiStore(this.app.vault).write(this.state),
+    );
+    await this.refresh();
     new Notice("Review packets exported to the configured knowledge folder.");
   }
   private async recordFailure(type: string, error: unknown): Promise<void> {
@@ -613,7 +617,7 @@ class WikiSkillView extends ItemView {
   constructor(
     leaf: WorkspaceLeaf,
     private readonly model: () => DashboardModel,
-    private readonly action: (name: string) => void,
+    private readonly controller: WikiSkillDashboardController,
   ) {
     super(leaf);
   }
@@ -630,8 +634,7 @@ class WikiSkillView extends ItemView {
     this.render();
   }
   render(): void {
-    this.contentEl.innerHTML = renderDashboard(this.model());
-    wireDashboardControls(this.contentEl, this.action);
+    this.controller.mount(this.contentEl, this.model());
   }
 }
 

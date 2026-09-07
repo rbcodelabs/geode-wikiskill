@@ -27,7 +27,13 @@ export class BudgetScheduler {
       return { status: "skipped" };
     this.locks.add(scope);
     this.budget.usedTokens += estimatedTokens;
-    await this.persist();
+    try {
+      await this.persist();
+    } catch (error) {
+      this.budget.usedTokens -= estimatedTokens;
+      this.locks.delete(scope);
+      throw error;
+    }
     try {
       const value = await work();
       if (value === undefined) {
