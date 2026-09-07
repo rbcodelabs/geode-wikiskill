@@ -7,6 +7,7 @@ export class BudgetScheduler {
       usedTokens: 0,
     },
     private readonly now: () => Date = () => new Date(),
+    private readonly persist: () => Promise<void> = async () => undefined,
   ) {}
   async run<T>(
     scope: string,
@@ -17,6 +18,7 @@ export class BudgetScheduler {
     if (today !== this.budget.utcDay) {
       this.budget.utcDay = today;
       this.budget.usedTokens = 0;
+      await this.persist();
     }
     if (
       this.locks.has(scope) ||
@@ -25,10 +27,12 @@ export class BudgetScheduler {
       return { status: "skipped" };
     this.locks.add(scope);
     this.budget.usedTokens += estimatedTokens;
+    await this.persist();
     try {
       const value = await work();
       if (value === undefined) {
         this.budget.usedTokens -= estimatedTokens;
+        await this.persist();
         return { status: "skipped" };
       }
       return { status: "complete", value };

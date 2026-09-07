@@ -5,7 +5,12 @@ import { gradeEvaluation } from "../src/evaluation";
 import { defaultState, migrateState } from "../src/state";
 import { gradeFixture, parseAndValidateOutput } from "../src/playbook";
 import { BudgetScheduler } from "../src/scheduler";
-import { renderDashboard } from "../src/dashboard";
+import {
+  dispatchDashboardAction,
+  renderDashboard,
+  wireDashboardControls,
+} from "../src/dashboard";
+import { JSDOM } from "jsdom";
 import { renderReview } from "../src/wiki";
 
 describe("privacy boundary", () => {
@@ -201,6 +206,49 @@ describe("playbook and scheduling boundaries", () => {
       ).status,
     ).toBe("skipped");
   });
+  it("persists a reservation before work so a crash cannot reset spent budget", async () => {
+    const budget = { utcDay: "", usedTokens: 0 },
+      saved: number[] = [];
+    const scheduler = new BudgetScheduler(
+      10,
+      budget,
+      () => new Date("2026-09-07T00:00:00Z"),
+      async () => {
+        saved.push(budget.usedTokens);
+      },
+    );
+    await expect(
+      scheduler.run("skill", 4, async () => {
+        throw new Error("crash");
+      }),
+    ).rejects.toThrow("crash");
+    expect(saved).toEqual([0, 4]);
+    const reloaded = new BudgetScheduler(
+      10,
+      { ...budget },
+      () => new Date("2026-09-07T01:00:00Z"),
+    );
+    expect((await reloaded.run("other", 7, async () => true)).status).toBe(
+      "skipped",
+    );
+  });
+  it("persists the refund for empty work without a phantom charge", async () => {
+    const budget = { utcDay: "2026-09-07", usedTokens: 0 },
+      saved: number[] = [];
+    const scheduler = new BudgetScheduler(
+      10,
+      budget,
+      () => new Date("2026-09-07T00:00:00Z"),
+      async () => {
+        saved.push(budget.usedTokens);
+      },
+    );
+    expect(
+      (await scheduler.run("skill", 5, async () => undefined)).status,
+    ).toBe("skipped");
+    expect(saved).toEqual([5, 0]);
+    expect(budget.usedTokens).toBe(0);
+  });
 });
 
 describe("dashboard", () => {
@@ -233,6 +281,74 @@ describe("dashboard", () => {
     ])
       expect(html).toContain(action);
     expect(html).toContain("Offline");
+  });
+  it("uses production control wiring and dispatch to persist review export", async () => {
+    const dom = new JSDOM(
+      renderDashboard({
+        status: "full",
+        imported: 0,
+        redactions: 7,
+        patterns: [],
+        candidates: [],
+        evaluations: [],
+        importProgress: {
+          scannedSources: 0,
+          scannedBytes: 0,
+          importedEvents: 0,
+          redactions: 7,
+        },
+      }),
+    );
+    let persisted = 0;
+    const noop = async () => undefined;
+    const target = {
+      importEvidence: noop,
+      compile: noop,
+      propose: noop,
+      evaluateLatest: noop,
+      cancel: noop,
+      retry: noop,
+      exportReviewPackets: async () => {
+        persisted += 1;
+      },
+    };
+    wireDashboardControls(
+      dom.window.document.body as unknown as HTMLElement,
+      (action) => void dispatchDashboardAction(target, action),
+    );
+    (
+      dom.window.document.querySelector(
+        '[data-action="export-review-packets"]',
+      ) as HTMLElement
+    ).click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(persisted).toBe(1);
+    expect(dom.window.document.body.textContent).toContain("7 redactions");
+  });
+  it("renders persisted redaction totals after state reload", () => {
+    const reloaded = migrateState(
+      JSON.parse(
+        JSON.stringify({
+          ...defaultState(),
+          importProgress: {
+            scannedSources: 2,
+            scannedBytes: 100,
+            importedEvents: 1,
+            redactions: 9,
+          },
+        }),
+      ),
+    );
+    const html = renderDashboard({
+      status: "offline",
+      imported: reloaded.evidence.length,
+      redactions: reloaded.importProgress.redactions,
+      patterns: [],
+      candidates: [],
+      evaluations: [],
+      importProgress: reloaded.importProgress,
+    });
+    expect(html).toContain("9 redactions");
   });
 });
 describe("review packet", () => {

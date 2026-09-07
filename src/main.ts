@@ -8,7 +8,12 @@ import {
   type EventRef,
 } from "obsidian";
 import { compilePatterns } from "./compiler";
-import { renderDashboard, type DashboardModel } from "./dashboard";
+import {
+  dispatchDashboardAction,
+  renderDashboard,
+  wireDashboardControls,
+  type DashboardModel,
+} from "./dashboard";
 import { TraceImporter } from "./importer";
 import { defaultState, migrateState, type PluginState } from "./state";
 import { ThreadsAdapter } from "./threads-adapter";
@@ -29,8 +34,6 @@ export default class WikiSkillPlugin extends Plugin {
   state: PluginState = defaultState();
   private readonly hostEvents = new EventTarget();
   private adapter!: ThreadsAdapter;
-  private importedCount = 0;
-  private redactions = 0;
   private activeCancels = new Map<string, () => Promise<void>>();
   private scheduler!: BudgetScheduler;
   private queue!: JobQueue;
@@ -38,10 +41,11 @@ export default class WikiSkillPlugin extends Plugin {
 
   async onload(): Promise<void> {
     this.state = migrateState(await this.loadData());
-    this.importedCount = this.state.evidence.length;
     this.scheduler = new BudgetScheduler(
       this.state.settings.dailyTokenBudget,
       this.state.budget,
+      () => new Date(),
+      () => this.saveData(this.state),
     );
     const workspace = this.app.workspace as unknown as WorkspaceExternalEvents;
     this.registerEvent(
@@ -217,8 +221,6 @@ export default class WikiSkillPlugin extends Plugin {
       }
       this.state.sourceCheckpoints = result.checkpoints;
       const added = incoming.filter((item) => !known.has(item.id)).length;
-      this.importedCount = this.state.evidence.length;
-      this.redactions += result.redactions;
       this.state.importProgress = {
         sourcePageCursor: result.sourcePageCursor,
         scannedSources:
@@ -530,16 +532,11 @@ export default class WikiSkillPlugin extends Plugin {
     }
   }
   private async handleAction(action: string): Promise<void> {
-    if (action === "import-evidence") await this.importEvidence();
-    else if (action === "compile-patterns") await this.compile();
-    else if (action === "propose-candidate") await this.propose();
-    else if (action === "evaluate") await this.evaluateLatest();
-    else if (action === "cancel") await this.cancel();
-    else if (action === "retry") await this.retry();
-    else if (action === "export-review-packets") {
-      await this.persist();
-      new Notice("Review packets exported to the configured knowledge folder.");
-    }
+    await dispatchDashboardAction(this, action);
+  }
+  async exportReviewPackets(): Promise<void> {
+    await this.persist();
+    new Notice("Review packets exported to the configured knowledge folder.");
   }
   private async recordFailure(type: string, error: unknown): Promise<void> {
     const message = error instanceof Error ? error.message : `${type} failed`;
@@ -588,7 +585,7 @@ export default class WikiSkillPlugin extends Plugin {
     return {
       status: this.adapter.status,
       imported: this.state.evidence.length,
-      redactions: this.redactions,
+      redactions: this.state.importProgress.redactions,
       patterns: this.state.patterns,
       candidates: this.state.candidates,
       evaluations: this.state.evaluations,
@@ -634,20 +631,7 @@ class WikiSkillView extends ItemView {
   }
   render(): void {
     this.contentEl.innerHTML = renderDashboard(this.model());
-    for (const button of Array.from(
-      this.contentEl.querySelectorAll<HTMLElement>("[data-action]"),
-    ))
-      button.addEventListener("click", () =>
-        this.action(button.dataset.action ?? ""),
-      );
-    for (const button of Array.from(
-      this.contentEl.querySelectorAll<HTMLElement>("[data-section]"),
-    ))
-      button.addEventListener("click", () =>
-        this.contentEl
-          .querySelector(`#wikiskill-${button.dataset.section}`)
-          ?.scrollIntoView({ behavior: "smooth", block: "start" }),
-      );
+    wireDashboardControls(this.contentEl, this.action);
   }
 }
 

@@ -98,3 +98,44 @@ export function renderDashboard(model: DashboardModel): string {
   ];
   return `<div class="wikiskill-shell"><header><p class="eyebrow">AGENT KNOWLEDGE</p><h1>WikiSkill Evolution</h1><p>Evidence becomes reviewable skill improvements—never automatic changes.</p><span class="status status-${model.status}">${status}</span></header><nav>${cards.map(([title]) => `<button type="button" data-section="${title.toLowerCase()}">${title}</button>`).join("")}</nav><div class="wikiskill-actions">${actions.map((action) => `<button type="button" data-action="${action.toLowerCase().replace(/ /g, "-")}">${action}</button>`).join("")}</div><main>${cards.map(([title, body]) => `<section id="wikiskill-${title.toLowerCase()}"><h2>${title}</h2><p>${body}</p></section>`).join("")}</main></div>`;
 }
+export interface DashboardActionTarget {
+  importEvidence(): Promise<void>;
+  compile(): Promise<void>;
+  propose(): Promise<void>;
+  evaluateLatest(): Promise<void>;
+  cancel(): Promise<void>;
+  retry(): Promise<void>;
+  exportReviewPackets(): Promise<void>;
+}
+export async function dispatchDashboardAction(
+  target: DashboardActionTarget,
+  action: string,
+): Promise<void> {
+  const routes: Record<string, () => Promise<void>> = {
+    "import-evidence": () => target.importEvidence(),
+    "compile-patterns": () => target.compile(),
+    "propose-candidate": () => target.propose(),
+    evaluate: () => target.evaluateLatest(),
+    cancel: () => target.cancel(),
+    retry: () => target.retry(),
+    "export-review-packets": () => target.exportReviewPackets(),
+  };
+  await routes[action]?.();
+}
+export function wireDashboardControls(
+  root: HTMLElement,
+  action: (name: string) => void,
+): void {
+  for (const button of Array.from(
+    root.querySelectorAll<HTMLElement>("[data-action]"),
+  ))
+    button.addEventListener("click", () => action(button.dataset.action ?? ""));
+  for (const button of Array.from(
+    root.querySelectorAll<HTMLElement>("[data-section]"),
+  ))
+    button.addEventListener("click", () =>
+      root
+        .querySelector(`#wikiskill-${button.dataset.section}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
+}

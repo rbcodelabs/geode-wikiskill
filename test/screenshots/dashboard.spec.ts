@@ -69,32 +69,6 @@ test("dashboard renders complete desktop information architecture", async ({
     { animations: "disabled" },
   );
 });
-test("dashboard actions expose review export lifecycle control", async ({
-  page,
-}) => {
-  await page.setContent(css + renderDashboard(model));
-  const actions: string[] = [];
-  await page.exposeFunction("recordAction", (value: string) =>
-    actions.push(value),
-  );
-  await page
-    .locator("[data-action]")
-    .evaluateAll((buttons) =>
-      buttons.forEach((button) =>
-        button.addEventListener(
-          "click",
-          () =>
-            void (
-              window as unknown as { recordAction: (value: string) => void }
-            ).recordAction((button as HTMLElement).dataset.action ?? ""),
-        ),
-      ),
-    );
-  await page.locator('[data-action="export-review-packets"]').click();
-  await expect.poll(() => actions).toContain("export-review-packets");
-  await expect(page.locator('[data-section="evaluations"]')).toBeVisible();
-});
-
 test("dashboard remains single-column and usable on a narrow host", async ({
   page,
 }) => {
