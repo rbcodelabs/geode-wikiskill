@@ -8,12 +8,8 @@ import {
   type EventRef,
 } from "obsidian";
 import { compilePatterns } from "./compiler";
-import {
-  dispatchDashboardAction,
-  persistReviewPackets,
-  WikiSkillDashboardController,
-  type DashboardModel,
-} from "./dashboard";
+import { WikiSkillDashboardController, type DashboardModel } from "./dashboard";
+import { WikiSkillPluginActionTarget } from "./plugin-actions";
 import { TraceImporter } from "./importer";
 import { defaultState, migrateState, type PluginState } from "./state";
 import { ThreadsAdapter } from "./threads-adapter";
@@ -81,13 +77,34 @@ export default class WikiSkillPlugin extends Plugin {
       this.scopeLock,
     );
     if (this.queue.reconcileInterrupted()) await this.persist();
+    const actions = new WikiSkillPluginActionTarget(
+      {
+        importEvidence: () => this.importEvidence(),
+        compile: () => this.compile(),
+        propose: () => this.propose(),
+        evaluateLatest: () => this.evaluateLatest(),
+        cancel: () => this.cancel(),
+        retry: () => this.retry(),
+      },
+      {
+        saveData: () => this.saveData(this.state),
+        writeVaultPackets: () =>
+          new VaultWikiStore(this.app.vault).write(this.state),
+        afterExport: async () => {
+          await this.refresh();
+          new Notice(
+            "Review packets exported to the configured knowledge folder.",
+          );
+        },
+      },
+    );
     this.registerView(
       VIEW_TYPE,
       (leaf) =>
         new WikiSkillView(
           leaf,
           () => this.dashboardModel(),
-          new WikiSkillDashboardController(this),
+          new WikiSkillDashboardController(actions),
         ),
     );
     this.addRibbonIcon(
@@ -530,17 +547,6 @@ export default class WikiSkillPlugin extends Plugin {
     } finally {
       this.activeCancels.delete(running.id);
     }
-  }
-  private async handleAction(action: string): Promise<void> {
-    await dispatchDashboardAction(this, action);
-  }
-  async exportReviewPackets(): Promise<void> {
-    await persistReviewPackets(
-      () => this.saveData(this.state),
-      () => new VaultWikiStore(this.app.vault).write(this.state),
-    );
-    await this.refresh();
-    new Notice("Review packets exported to the configured knowledge folder.");
   }
   private async recordFailure(type: string, error: unknown): Promise<void> {
     const message = error instanceof Error ? error.message : `${type} failed`;

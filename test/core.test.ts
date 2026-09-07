@@ -6,10 +6,10 @@ import { defaultState, migrateState } from "../src/state";
 import { gradeFixture, parseAndValidateOutput } from "../src/playbook";
 import { BudgetScheduler } from "../src/scheduler";
 import {
-  persistReviewPackets,
   renderDashboard,
   WikiSkillDashboardController,
 } from "../src/dashboard";
+import { WikiSkillPluginActionTarget } from "../src/plugin-actions";
 import { JSDOM } from "jsdom";
 import { renderReview } from "../src/wiki";
 
@@ -333,24 +333,24 @@ describe("dashboard", () => {
     let saved = 0,
       exported = 0;
     const noop = async () => undefined;
-    const target = {
-      importEvidence: noop,
-      compile: noop,
-      propose: noop,
-      evaluateLatest: noop,
-      cancel: noop,
-      retry: noop,
-      exportReviewPackets: async () => {
-        await persistReviewPackets(
-          async () => {
-            saved += 1;
-          },
-          async () => {
-            exported += 1;
-          },
-        );
+    const target = new WikiSkillPluginActionTarget(
+      {
+        importEvidence: noop,
+        compile: noop,
+        propose: noop,
+        evaluateLatest: noop,
+        cancel: noop,
+        retry: noop,
       },
-    };
+      {
+        saveData: async () => {
+          saved += 1;
+        },
+        writeVaultPackets: async () => {
+          exported += 1;
+        },
+      },
+    );
     new WikiSkillDashboardController(target).mount(
       dom.window.document.body as unknown as HTMLElement,
       {

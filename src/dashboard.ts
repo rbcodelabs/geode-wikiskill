@@ -149,10 +149,3 @@ export class WikiSkillDashboardController {
     );
   }
 }
-export async function persistReviewPackets(
-  saveData: () => Promise<void>,
-  exportPackets: () => Promise<void>,
-): Promise<void> {
-  await saveData();
-  await exportPackets();
-}
