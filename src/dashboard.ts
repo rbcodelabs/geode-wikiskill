@@ -9,6 +9,13 @@ export interface DashboardModel {
   candidates: Candidate[];
   evaluations: EvaluationRecord[];
   jobs?: Array<{ id: string; status: string; type: string }>;
+  importProgress?: {
+    sourcePageCursor?: string;
+    scannedSources: number;
+    scannedBytes: number;
+    importedEvents: number;
+    redactions: number;
+  };
 }
 const escape = (value: string): string =>
   value.replace(
@@ -29,7 +36,7 @@ export function renderDashboard(model: DashboardModel): string {
     ["Dependency", `${status} · Agent Threads`],
     [
       "Import",
-      `${model.imported} evidence events · ${model.redactions} redactions`,
+      `${model.imported} evidence events · ${model.redactions} redactions<br>Scanned: ${model.importProgress?.scannedSources ?? 0} sources / ${model.importProgress?.scannedBytes ?? 0} bytes<br>Continuation: ${escape(model.importProgress?.sourcePageCursor ?? "start")}`,
     ],
     [
       "Patterns",
@@ -45,7 +52,7 @@ export function renderDashboard(model: DashboardModel): string {
         ? model.candidates
             .map(
               (c) =>
-                `${escape(c.id)} — ${c.status}<br><code>${escape(c.content)}</code>${c.rationale ? `<br>Rationale: ${escape(c.rationale)}` : ""}<br>Provenance: ${escape(c.evidenceHash ?? "pending")}`,
+                `${escape(c.id)} — ${c.status}<br><code>${escape(c.content)}</code>${c.rationale ? `<br>Rationale: ${escape(c.rationale)}` : ""}<br>Provenance: ${escape(c.evidenceHash ?? "pending")}<br>Diff: <del>${escape(c.baselineContent ?? "")}</del><ins>${escape(c.content)}</ins>`,
             )
             .join("<hr>")
         : "No candidates",
@@ -56,7 +63,7 @@ export function renderDashboard(model: DashboardModel): string {
         ? model.evaluations
             .map(
               (e) =>
-                `${escape(e.candidateId)} — ${e.decision} (${e.baselineScore.toFixed(2)} → ${e.candidateScore.toFixed(2)})<br>Fixtures: ${escape(JSON.stringify(e.fixtureOutcomes ?? {}))}<br>Contract: ${escape(e.contractHash ?? "pending")}`,
+                `${escape(e.candidateId)} — ${e.decision} (${e.baselineScore.toFixed(2)} → ${e.candidateScore.toFixed(2)})<br>Fixtures: ${escape(JSON.stringify(e.fixtureOutcomes ?? {}))}<br>Usage: ${e.usage?.inputTokens ?? 0} in / ${e.usage?.outputTokens ?? 0} out / $${(e.usage?.costUsd ?? 0).toFixed(4)}<br>Contract: ${escape(e.contractHash ?? "pending")}`,
             )
             .join("<hr>")
         : "No evaluations",
@@ -87,6 +94,7 @@ export function renderDashboard(model: DashboardModel): string {
     "Evaluate",
     "Cancel",
     "Retry",
+    "Export review packets",
   ];
   return `<div class="wikiskill-shell"><header><p class="eyebrow">AGENT KNOWLEDGE</p><h1>WikiSkill Evolution</h1><p>Evidence becomes reviewable skill improvements—never automatic changes.</p><span class="status status-${model.status}">${status}</span></header><nav>${cards.map(([title]) => `<button type="button" data-section="${title.toLowerCase()}">${title}</button>`).join("")}</nav><div class="wikiskill-actions">${actions.map((action) => `<button type="button" data-action="${action.toLowerCase().replace(/ /g, "-")}">${action}</button>`).join("")}</div><main>${cards.map(([title, body]) => `<section id="wikiskill-${title.toLowerCase()}"><h2>${title}</h2><p>${body}</p></section>`).join("")}</main></div>`;
 }

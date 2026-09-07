@@ -76,6 +76,7 @@ export default class WikiSkillPlugin extends Plugin {
       () => this.persist(),
       this.scopeLock,
     );
+    if (this.queue.reconcileInterrupted()) await this.persist();
     this.registerView(
       VIEW_TYPE,
       (leaf) =>
@@ -122,7 +123,17 @@ export default class WikiSkillPlugin extends Plugin {
     });
     this.addSettingTab(new WikiSkillSettings(this.app, this));
     this.registerInterval(
-      window.setInterval(() => void this.runScheduledCycle(), 15 * 60 * 1000),
+      window.setInterval(
+        () => {
+          void this.runScheduledCycle().catch((error) => {
+            console.error("WikiSkill scheduled cycle failed", error);
+            new Notice(
+              "WikiSkill scheduled cycle failed; see console for details",
+            );
+          });
+        },
+        15 * 60 * 1000,
+      ),
     );
   }
   onunload(): void {
@@ -160,23 +171,63 @@ export default class WikiSkillPlugin extends Plugin {
       const result = await importer.prepareBatch(
         this.state.sourceCheckpoints,
         this.state.settings.importLimit,
+        {
+          sourcePageCursor: this.state.importProgress.sourcePageCursor,
+          maxSources: 100,
+          maxBytes: this.state.settings.importLimit * 65536,
+        },
       );
       const importedAt = new Date().toISOString();
-      const incoming = result.events.map((event) => ({
-        id: event.id,
-        skill: event.skill!,
-        action: event.text,
-        outcome: event.outcome,
-        importedAt,
-      }));
+      const merged = new Map<
+        string,
+        {
+          id: string;
+          skill: string;
+          action: string;
+          outcome: import("./model").Outcome;
+          importedAt: string;
+        }
+      >();
+      for (const event of result.events) {
+        const prior =
+          merged.get(event.id) ??
+          this.state.evidence.find((item) => item.id === event.id);
+        merged.set(event.id, {
+          id: event.id,
+          skill: event.skill!,
+          action: event.text || prior?.action || `Invoke ${event.skill}`,
+          outcome:
+            event.outcome === "unknown"
+              ? (prior?.outcome ?? "unknown")
+              : event.outcome,
+          importedAt,
+        });
+      }
+      const incoming = [...merged.values()];
       const known = new Set(this.state.evidence.map((item) => item.id));
       this.state.evidence.push(
         ...incoming.filter((item) => !known.has(item.id)),
       );
+      for (const item of incoming.filter((item) => known.has(item.id))) {
+        const existing = this.state.evidence.find(
+          (value) => value.id === item.id,
+        );
+        if (existing && item.outcome !== "unknown")
+          existing.outcome = item.outcome;
+      }
       this.state.sourceCheckpoints = result.checkpoints;
       const added = incoming.filter((item) => !known.has(item.id)).length;
       this.importedCount = this.state.evidence.length;
       this.redactions += result.redactions;
+      this.state.importProgress = {
+        sourcePageCursor: result.sourcePageCursor,
+        scannedSources:
+          this.state.importProgress.scannedSources + result.scannedSources,
+        scannedBytes:
+          this.state.importProgress.scannedBytes + result.scannedBytes,
+        importedEvents: this.state.importProgress.importedEvents + added,
+        redactions: this.state.importProgress.redactions + result.redactions,
+      };
       await this.persist();
       new Notice(`Imported ${added} eligible event(s).`);
     } catch (error) {
@@ -226,17 +277,19 @@ export default class WikiSkillPlugin extends Plugin {
       const scheduled = await this.scheduler.run(
         "integration-routing",
         2000,
-        () => this.queue.propose("integration-routing", evidence),
+        () =>
+          this.queue.propose(
+            "integration-routing",
+            evidence,
+            undefined,
+            contract.manifest.budgets.maxCandidateTokens,
+          ),
       );
       if (scheduled.status === "skipped" || !scheduled.value)
         throw new Error("Daily budget exhausted or operation already running");
       const candidate = scheduled.value;
-      if (
-        Math.ceil(Buffer.byteLength(candidate.content, "utf8") / 4) >
-        contract.manifest.budgets.maxCandidateTokens
-      )
-        throw new Error("Candidate exceeds contract token budget");
       candidate.sourceHash = canonicalHash;
+      candidate.baselineContent = contract.skillText;
       candidate.purposeHash = contract.manifest.source.purposeHash;
       candidate.contractHash = contract.contractHash;
       candidate.fixtureHashes = Object.fromEntries(
@@ -283,26 +336,27 @@ export default class WikiSkillPlugin extends Plugin {
           "Configured canonical skill does not match evaluation contract",
         );
       const jobId = `evaluate-${candidate.id}`;
+      const expectedInput = {
+        candidateId: candidate.id,
+        manifestPath: evaluationManifestPath,
+        canonicalSkillPath,
+        candidateHash: createHash("sha256")
+          .update(candidate.content)
+          .digest("hex"),
+        sourceHash: contract.manifest.source.hash,
+        contractHash: contract.contractHash,
+        fixtureHashes: Object.fromEntries(
+          contract.fixtures.map((item) => [item.fixture.id, item.hash]),
+        ),
+        execution: {
+          harness: "claude",
+          model: "claude-sonnet-4-5",
+          maxTurns: 1,
+        },
+      };
       let job = this.state.jobs.find((item) => item.id === jobId);
       if (!job) {
-        const input = {
-          candidateId: candidate.id,
-          manifestPath: evaluationManifestPath,
-          canonicalSkillPath,
-          candidateHash: createHash("sha256")
-            .update(candidate.content)
-            .digest("hex"),
-          sourceHash: contract.manifest.source.hash,
-          contractHash: contract.contractHash,
-          fixtureHashes: Object.fromEntries(
-            contract.fixtures.map((item) => [item.fixture.id, item.hash]),
-          ),
-          execution: {
-            harness: "claude",
-            model: "claude-sonnet-4-5",
-            maxTurns: 1,
-          },
-        };
+        const input = expectedInput;
         job = {
           id: jobId,
           type: "evaluate",
@@ -315,7 +369,10 @@ export default class WikiSkillPlugin extends Plugin {
           evidenceHash: candidate.evidenceHash,
         };
         this.state.jobs.push(job);
-      }
+      } else if (JSON.stringify(job.input) !== JSON.stringify(expectedInput))
+        throw new Error(
+          "Evaluation retry inputs are stale; create a new candidate evaluation",
+        );
       job.status = "running";
       job.error = undefined;
       await this.persist();
@@ -432,7 +489,19 @@ export default class WikiSkillPlugin extends Plugin {
         if (!c) throw new Error("Stored evaluation candidate is unavailable");
         await this.evaluateLatest(c.id);
       } else {
-        const out = await this.queue.retry(last.id);
+        const reserved = await this.scheduler.run(
+          last.skill,
+          2000,
+          async () => {
+            await this.persist();
+            return this.queue.retry(last.id);
+          },
+        );
+        if (reserved.status === "skipped" || !reserved.value)
+          throw new Error(
+            "Daily budget exhausted or operation already running",
+          );
+        const out = reserved.value;
         if (
           !Array.isArray(out) &&
           !this.state.candidates.some((x) => x.id === out.id)
@@ -467,6 +536,10 @@ export default class WikiSkillPlugin extends Plugin {
     else if (action === "evaluate") await this.evaluateLatest();
     else if (action === "cancel") await this.cancel();
     else if (action === "retry") await this.retry();
+    else if (action === "export-review-packets") {
+      await this.persist();
+      new Notice("Review packets exported to the configured knowledge folder.");
+    }
   }
   private async recordFailure(type: string, error: unknown): Promise<void> {
     const message = error instanceof Error ? error.message : `${type} failed`;
@@ -520,6 +593,7 @@ export default class WikiSkillPlugin extends Plugin {
       candidates: this.state.candidates,
       evaluations: this.state.evaluations,
       jobs: this.state.jobs,
+      importProgress: this.state.importProgress,
     };
   }
   private async openDashboard(): Promise<void> {

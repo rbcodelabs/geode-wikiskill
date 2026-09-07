@@ -26,6 +26,12 @@ export interface ProviderTraceEvent {
   readonly timestamp: string;
   readonly type: string;
   readonly invokedSkill?: string;
+  readonly skillLoadOutcome?: "loaded";
+  readonly skillRunOutcomes?: readonly {
+    readonly invokedSkill: string;
+    readonly runOutcome: "success" | "failure";
+    readonly invocationIndex: number;
+  }[];
   readonly data: unknown;
 }
 export interface TraceChunk {
@@ -33,7 +39,7 @@ export interface TraceChunk {
   readonly revision: string;
   readonly contentHash: string;
   readonly cursor?: string;
-  readonly nextCursor?: string;
+  readonly nextCursor: string;
   readonly eof: boolean;
   readonly events: readonly ProviderTraceEvent[];
 }

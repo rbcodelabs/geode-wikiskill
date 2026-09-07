@@ -37,6 +37,7 @@ export interface Candidate {
   contractHash?: string;
   fixtureHashes?: Record<string, string>;
   rationale?: string;
+  baselineContent?: string;
   createdAt: string;
   status: "draft" | "evaluated" | "rejected" | "review";
 }

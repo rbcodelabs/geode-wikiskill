@@ -21,7 +21,13 @@ export function renderReview(
     .map((line) => `    ${line}`)
     .join(
       "\n",
-    )}\n\n## Evaluation\n\n- Decision: ${evaluation.decision}\n- Baseline: ${evaluation.baselineScore}\n- Candidate: ${evaluation.candidateScore}\n- Automatic promotion: disabled\n`;
+    )}\n\n## Rationale\n\n${inline(candidate.rationale ?? "Not supplied")}\n\n## Baseline-to-candidate diff\n\n### Baseline\n\n${indent(candidate.baselineContent ?? "Unavailable")}\n\n### Candidate\n\n${indent(candidate.content)}\n\n## Evaluation\n\n- Decision: ${evaluation.decision}\n- Baseline: ${evaluation.baselineScore}\n- Candidate: ${evaluation.candidateScore}\n- Fixture outcomes: ${inline(JSON.stringify(evaluation.fixtureOutcomes ?? {}))}\n- Usage: ${evaluation.usage?.inputTokens ?? 0} input / ${evaluation.usage?.outputTokens ?? 0} output / $${(evaluation.usage?.costUsd ?? 0).toFixed(4)}\n- Evidence hash: ${inline(candidate.evidenceHash ?? "pending")}\n- Contract hash: ${inline(candidate.contractHash ?? "pending")}\n- Automatic promotion: disabled\n`;
+}
+function indent(value: string): string {
+  return value
+    .split("\n")
+    .map((line) => `    ${line}`)
+    .join("\n");
 }
 function inline(value: string): string {
   return value

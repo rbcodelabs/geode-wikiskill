@@ -31,9 +31,26 @@ export class JobQueue {
     skill: string,
     evidence: string,
     retryId?: string,
+    maxCandidateTokens = Number.MAX_SAFE_INTEGER,
   ): Promise<Candidate> {
-    const job = this.resolve("proposer-v1", skill, evidence, retryId);
-    const p = parseCandidate(await this.run(job));
+    const job = this.resolve(
+      "proposer-v1",
+      skill,
+      evidence,
+      retryId,
+      [],
+      maxCandidateTokens,
+    );
+    const p = parseCandidate(
+      await this.run(job, (output) => {
+        const parsed = parseCandidate(output);
+        if (
+          Math.ceil(Buffer.byteLength(parsed.content, "utf8") / 4) >
+          (job.input.maxCandidateTokens ?? Number.MAX_SAFE_INTEGER)
+        )
+          throw new Error("Candidate exceeds contract token budget");
+      }),
+    );
     return {
       id: `proposal-${job.id}`,
       skill,
@@ -58,7 +75,9 @@ export class JobQueue {
       evidenceIds,
     );
     return parsePatterns(
-      await this.run(job),
+      await this.run(job, (output) => {
+        parsePatterns(output, skill, new Set(job.input.evidenceIds));
+      }),
       skill,
       new Set(job.input.evidenceIds),
     );
@@ -68,7 +87,12 @@ export class JobQueue {
     if (!j || !j.input.evidence)
       throw new Error("Stored job input is unavailable");
     return j.type === "proposer-v1"
-      ? this.propose(j.skill, j.input.evidence, j.id)
+      ? this.propose(
+          j.skill,
+          j.input.evidence,
+          j.id,
+          j.input.maxCandidateTokens,
+        )
       : this.maintain(
           j.skill,
           j.input.evidence,
@@ -93,6 +117,7 @@ export class JobQueue {
     evidence: string,
     retryId?: string,
     evidenceIds: readonly string[] = [],
+    maxCandidateTokens = Number.MAX_SAFE_INTEGER,
   ): Job {
     if (retryId) {
       const prior = this.jobs.find((x) => x.id === retryId);
@@ -102,7 +127,7 @@ export class JobQueue {
     }
     const id = `${type}-${skill}-${Date.now()}`,
       evidenceHash = sha256(evidence),
-      input = { evidence, evidenceIds: [...evidenceIds] };
+      input = { evidence, evidenceIds: [...evidenceIds], maxCandidateTokens };
     const job: Job = {
       id,
       type,
@@ -123,7 +148,10 @@ export class JobQueue {
     this.jobs.push(job);
     return job;
   }
-  private async run(job: Job): Promise<string> {
+  private async run(
+    job: Job,
+    validate: (output: string) => void,
+  ): Promise<string> {
     return this.lock.run(job.skill, async () => {
       try {
         job.status = "running";
@@ -162,6 +190,7 @@ export class JobQueue {
           this.jobs.find((item) => item.id === job.id)?.status === "cancelled"
         )
           throw new Error("Job was cancelled");
+        validate(r.finalMessage.content);
         job.status = "complete";
         job.outputHash = sha256(r.finalMessage.content);
         await this.persist();

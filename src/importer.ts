@@ -39,32 +39,19 @@ export class TraceImporter {
       cursor: this.cursor,
       limit,
     });
-    const output: TraceEvent[] = [];
-    let redactions = 0;
-    for (const event of chunk.events) {
-      if (!event.invokedSkill) continue;
-      const data = record(event.data);
-      const derived: TraceEvent = {
-        id: `${source.sourceId}:${event.index}`,
-        origin: stringField(data, "origin"),
-        projectId: source.projectId,
-        skill: event.invokedSkill,
-        text:
-          typeof event.data === "string"
-            ? event.data
-            : JSON.stringify(event.data),
-        outcome: outcomeField(data),
-      };
-      // Agent Threads filters own-origin sources; this second check rejects nested/spoofed origin metadata too.
-      if (!eligibleTrace(derived, this.consent)) continue;
-      const redacted = redactTrace(derived.text, this.secrets);
-      redactions += redacted.redactions;
-      output.push({ ...derived, text: redacted.text });
-    }
+    const converted = this.convert(
+      source.sourceId,
+      source.projectId,
+      chunk.events,
+    );
     // Cursor is committed only after every event is filtered and sanitized.
-    this.cursor = chunk.nextCursor ?? chunk.cursor ?? "";
+    this.cursor = chunk.nextCursor;
     this.sourceRevision = chunk.revision;
-    return { events: output, cursor: this.cursor, redactions };
+    return {
+      events: converted.events,
+      cursor: this.cursor,
+      redactions: converted.redactions,
+    };
   }
 
   async prepareBatch(
@@ -81,6 +68,11 @@ export class TraceImporter {
       >
     >,
     maxEvents = 100,
+    progress: {
+      sourcePageCursor?: string;
+      maxSources?: number;
+      maxBytes?: number;
+    } = {},
   ): Promise<{
     events: TraceEvent[];
     checkpoints: Record<
@@ -94,6 +86,9 @@ export class TraceImporter {
       }
     >;
     redactions: number;
+    sourcePageCursor?: string;
+    scannedSources: number;
+    scannedBytes: number;
   }> {
     maxEvents = Math.max(1, Math.min(500, Math.floor(maxEvents)));
     const api = this.adapter.requireApi();
@@ -109,16 +104,27 @@ export class TraceImporter {
     >;
     const events: TraceEvent[] = [];
     let redactions = 0;
-    let pageCursor: string | undefined;
+    let pageCursor: string | undefined = progress.sourcePageCursor;
+    let scannedSources = 0,
+      scannedBytes = 0;
+    const maxSources = Math.max(1, progress.maxSources ?? 100),
+      maxBytes = Math.max(1, progress.maxBytes ?? maxEvents * 65536);
     const seenPages = new Set<string>();
     let sourceEof = false;
-    while (!sourceEof && events.length < maxEvents) {
+    while (
+      !sourceEof &&
+      events.length < maxEvents &&
+      scannedSources < maxSources &&
+      scannedBytes < maxBytes
+    ) {
       const page = await api.traces.listSources({
         cursor: pageCursor,
-        limit: Math.min(100, maxEvents),
+        limit: 1,
       });
       sourceEof = page.eof;
       for (const source of page.sources) {
+        scannedSources += 1;
+        scannedBytes += source.byteLength;
         if (events.length >= maxEvents) break;
         if (!source.projectId || !this.consent.has(source.projectId)) continue;
         const checkpoint = checkpoints[source.sourceId];
@@ -152,7 +158,7 @@ export class TraceImporter {
             `Trace content hash changed while reading ${source.sourceId}`,
           );
         next[source.sourceId] = {
-          cursor: chunk.nextCursor ?? checkpoint?.cursor,
+          cursor: chunk.nextCursor,
           revision: chunk.revision,
           contentHash: chunk.contentHash,
           byteLength: source.byteLength,
@@ -167,7 +173,14 @@ export class TraceImporter {
       }
     }
     // `next` is a proposal. The caller atomically persists it with derived evidence.
-    return { events, checkpoints: next, redactions };
+    return {
+      events,
+      checkpoints: next,
+      redactions,
+      sourcePageCursor: sourceEof ? undefined : pageCursor,
+      scannedSources,
+      scannedBytes,
+    };
   }
 
   private convert(
@@ -179,6 +192,14 @@ export class TraceImporter {
     let redactions = 0;
     for (const event of events) {
       const data = record(event.data);
+      for (const outcome of event.skillRunOutcomes ?? [])
+        output.push({
+          id: `${sourceId}:${outcome.invocationIndex}`,
+          projectId,
+          skill: outcome.invokedSkill,
+          text: "",
+          outcome: outcome.runOutcome,
+        });
       if (!event.invokedSkill) continue;
       const derived: TraceEvent = {
         id: `${sourceId}:${event.index}`,
@@ -188,15 +209,27 @@ export class TraceImporter {
         text:
           typeof event.data === "string"
             ? event.data
-            : JSON.stringify(event.data),
-        outcome: outcomeField(data, event.type),
+            : (stringField(data, "text") ?? JSON.stringify(event.data)),
+        outcome: "unknown",
       };
       if (!eligibleTrace(derived, this.consent)) continue;
       const redacted = redactTrace(derived.text, this.secrets);
       redactions += redacted.redactions;
       output.push({ ...derived, text: redacted.text });
     }
-    return { events: output, redactions };
+    const merged = new Map<string, TraceEvent>();
+    for (const item of output) {
+      const prior = merged.get(item.id);
+      merged.set(item.id, {
+        ...item,
+        text: item.text || prior?.text || "",
+        outcome:
+          item.outcome === "unknown"
+            ? (prior?.outcome ?? "unknown")
+            : item.outcome,
+      });
+    }
+    return { events: [...merged.values()], redactions };
   }
   private async listSources(): Promise<
     readonly import("./threads-contract").TraceSource[]

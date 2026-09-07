@@ -19,7 +19,9 @@ describe("vertical pilot", () => {
     const importer = new TraceImporter(adapter, new Set(["project-1"]), []);
     const first = await importer.importNext();
     expect(first.events.map((event) => event.id)).toEqual(["source-1:0"]);
-    expect(first.cursor).toBe("3");
+    expect(first.cursor).toBe("4");
+    expect(first.events[0]?.outcome).toBe("success");
+    expect(first.events[0]?.text).toBe("resolve each capability independently");
     expect((await importer.importNext()).events).toEqual([]);
     const queue = new JobQueue(adapter);
     const candidate = await queue.propose(
@@ -159,7 +161,7 @@ describe("vertical pilot", () => {
     expect(Object.keys(batch.checkpoints)).toEqual(["source-1", "source-2"]);
     expect(batch.checkpoints["source-1"]).toMatchObject({
       revision: "hash-1",
-      byteLength: 300,
+      byteLength: 400,
     });
     expect(before).toEqual({});
   });
@@ -172,12 +174,31 @@ describe("vertical pilot", () => {
     adapter.start();
     const importer = new TraceImporter(adapter, new Set(["project-1"]), []);
     const first = await importer.prepareBatch({}, 10);
+    expect(first.checkpoints["source-1"]?.cursor).toBe("4");
     api.appendAttributedEvent();
     const second = await importer.prepareBatch(first.checkpoints, 10);
-    expect(second.events.map((event) => event.id)).toEqual(["source-1:3"]);
+    expect(second.events.map((event) => event.id)).toEqual(["source-1:4"]);
+    expect(second.events[0]?.outcome).toBe("failure");
     expect(second.checkpoints["source-1"]!.byteLength).toBeGreaterThan(
       first.checkpoints["source-1"]!.byteLength,
     );
+  });
+  it("persists source-page progress so bounded scans do not starve later sources", async () => {
+    const api = new FakeThreadsApi({ sourceCount: 2, sourcePageSize: 1 });
+    const adapter = new ThreadsAdapter(
+      () => ({ api: { v1: api } }),
+      new EventTarget(),
+    );
+    adapter.start();
+    const importer = new TraceImporter(adapter, new Set(["project-1"]), []);
+    const first = await importer.prepareBatch({}, 10, { maxSources: 1 });
+    expect(first.events.map((x) => x.id)).toEqual(["source-1:0"]);
+    expect(first.sourcePageCursor).toBe("1");
+    const second = await importer.prepareBatch(first.checkpoints, 10, {
+      sourcePageCursor: first.sourcePageCursor,
+      maxSources: 1,
+    });
+    expect(second.events.map((x) => x.id)).toEqual(["source-2:0"]);
   });
   it("rejects shrink and same-length replacement without advancing checkpoints", async () => {
     const api = new FakeThreadsApi();
@@ -192,12 +213,12 @@ describe("vertical pilot", () => {
     await expect(importer.prepareBatch(first.checkpoints, 10)).rejects.toThrow(
       /shrank/,
     );
-    api.setEventCount(3);
+    api.setEventCount(4);
     api.contentSalt = "-changed";
     await expect(importer.prepareBatch(first.checkpoints, 10)).rejects.toThrow(
       /replaced/,
     );
-    expect(first.checkpoints["source-1"]?.contentHash).toBe("content-1-3");
+    expect(first.checkpoints["source-1"]?.contentHash).toBe("content-1-4");
   });
 
   it("exposes the active authoring run to provider-backed cancellation", async () => {
@@ -231,5 +252,45 @@ describe("vertical pilot", () => {
     );
     expect(jobs[0]!.input.evidence).toBe("original evidence");
     expect(jobs[0]!.idempotencyKey).toBe(key);
+  });
+  it("marks an oversized proposed candidate failed before completing its job", async () => {
+    const api = new FakeThreadsApi();
+    const adapter = new ThreadsAdapter(
+      () => ({ api: { v1: api } }),
+      new EventTarget(),
+    );
+    adapter.start();
+    const jobs: import("../src/state").PluginState["jobs"] = [];
+    await expect(
+      new JobQueue(adapter, () => undefined, jobs).propose(
+        "integration-routing",
+        "evidence",
+        undefined,
+        1,
+      ),
+    ).rejects.toThrow(/token budget/);
+    expect(jobs[0]?.status).toBe("failed");
+  });
+  it("reconciles a persisted running job immediately when the queue starts", () => {
+    const api = new FakeThreadsApi();
+    const adapter = new ThreadsAdapter(
+      () => ({ api: { v1: api } }),
+      new EventTarget(),
+    );
+    adapter.start();
+    const jobs: import("../src/state").PluginState["jobs"] = [
+      {
+        id: "job",
+        type: "proposer-v1",
+        skill: "integration-routing",
+        status: "running",
+        idempotencyKey: "a".repeat(64),
+        input: { evidence: "same", maxCandidateTokens: 100 },
+        externalRunId: "run",
+      },
+    ];
+    const queue = new JobQueue(adapter, () => undefined, jobs);
+    expect(queue.reconcileInterrupted()).toBe(true);
+    expect(jobs[0]?.status).toBe("failed");
   });
 });

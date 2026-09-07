@@ -14,10 +14,11 @@ export class FakeThreadsApi implements ThreadsApiV1 {
   cancelledThreadRuns: string[] = [];
   private sourceCount: number;
   private sourcePageSize: number;
-  private eventCount = 3;
+  private eventCount = 4;
+  terminalOutcome: "success" | "failure" = "success";
   contentSalt = "";
   appendAttributedEvent(): void {
-    this.eventCount += 1;
+    this.eventCount += 2;
   }
   setEventCount(count: number): void {
     this.eventCount = count;
@@ -79,43 +80,66 @@ export class FakeThreadsApi implements ThreadsApiV1 {
         {
           index: 0,
           timestamp: "now",
-          type: "result",
+          type: "assistant",
           invokedSkill: "integration-routing",
           data: {
-            id: "external-1",
-            origin: "human",
-            text: "resolve independently",
-            outcome: "success",
+            text: "resolve each capability independently",
+            tools: ["Skill"],
           },
         },
         {
           index: 1,
           timestamp: "now",
-          type: "result",
-          invokedSkill: "integration-routing",
-          data: {
-            id: "own-1",
-            origin: "geode-wikiskill",
-            text: "candidate",
-            outcome: "success",
-          },
+          type: "tool_result",
+          skillLoadOutcome: "loaded" as const,
+          data: { kind: "tool_result" },
         },
         {
           index: 2,
           timestamp: "now",
           type: "result",
+          skillRunOutcomes: [
+            {
+              invokedSkill: "integration-routing",
+              runOutcome: this.terminalOutcome,
+              invocationIndex: 0,
+            },
+          ],
           data: {
-            invokedSkill: "integration-routing",
-            text: "spoofed attribution",
-            outcome: "success",
+            subtype: this.terminalOutcome === "success" ? "success" : "error",
+            errors:
+              this.terminalOutcome === "failure" ? ["run_failed"] : undefined,
           },
         },
         {
           index: 3,
           timestamp: "now",
           type: "result",
+          data: {
+            text: "spoofed attribution",
+            invokedSkill: "integration-routing",
+            outcome: "success",
+          },
+        },
+        {
+          index: 4,
+          timestamp: "later",
+          type: "assistant",
           invokedSkill: "integration-routing",
-          data: { text: "appended", outcome: "success" },
+          data: { text: "appended routing action", tools: ["Skill"] },
+        },
+        {
+          index: 5,
+          timestamp: "later",
+          type: "result",
+          skillRunOutcomes: [
+            {
+              invokedSkill: "integration-routing",
+              runOutcome: "failure" as const,
+              invocationIndex: 4,
+            },
+          ],
+          data: { subtype: "error", errors: ["run_failed"] },
         },
       ].slice(0, this.eventCount);
       const events = all.slice(start);
@@ -124,9 +148,7 @@ export class FakeThreadsApi implements ThreadsApiV1 {
         revision: this.sourceRevision,
         contentHash: `content-${sourceId.split("-")[1]}-${this.eventCount}${this.contentSalt}`,
         cursor: options?.cursor,
-        nextCursor: events.length
-          ? String(start + events.length)
-          : options?.cursor,
+        nextCursor: String(start + events.length),
         eof: true,
         events,
       };

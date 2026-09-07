@@ -6,6 +6,7 @@ import { defaultState, migrateState } from "../src/state";
 import { gradeFixture, parseAndValidateOutput } from "../src/playbook";
 import { BudgetScheduler } from "../src/scheduler";
 import { renderDashboard } from "../src/dashboard";
+import { renderReview } from "../src/wiki";
 
 describe("privacy boundary", () => {
   it("excludes own-origin and non-consented traces", () => {
@@ -97,6 +98,29 @@ describe("state", () => {
     expect(state.schemaVersion).toBe(defaultState().schemaVersion);
     expect(state.consentedProjects).toEqual(["p"]);
     expect(state.candidates).toEqual([]);
+  });
+  it("rejects non-finite persisted counters and evaluation scores", () => {
+    const state = migrateState({
+      schemaVersion: 2,
+      budget: { utcDay: "2026-09-07", usedTokens: NaN },
+      importProgress: { scannedSources: Infinity },
+      evaluations: [
+        {
+          id: "e",
+          candidateId: "c",
+          decision: "review",
+          baselineScore: NaN,
+          candidateScore: 1,
+          failures: [],
+          promoted: false,
+          createdAt: "now",
+        },
+      ],
+    });
+    expect(state.schemaVersion).toBe(3);
+    expect(state.budget.usedTokens).toBe(0);
+    expect(state.importProgress.scannedSources).toBe(0);
+    expect(state.evaluations).toEqual([]);
   });
 });
 
@@ -205,8 +229,47 @@ describe("dashboard", () => {
       "Evaluate",
       "Cancel",
       "Retry",
+      "Export review packets",
     ])
       expect(html).toContain(action);
     expect(html).toContain("Offline");
+  });
+});
+describe("review packet", () => {
+  it("exports diff, provenance, outcomes, usage, and no promotion", () => {
+    const hash = "a".repeat(64);
+    const text = renderReview(
+      {
+        id: "c",
+        skill: "integration-routing",
+        content: "new",
+        baselineContent: "old",
+        rationale: "why",
+        evidenceHash: hash,
+        contractHash: hash,
+        createdAt: "now",
+        status: "review",
+      },
+      {
+        id: "e",
+        candidateId: "c",
+        decision: "review",
+        baselineScore: 0,
+        candidateScore: 1,
+        failures: [],
+        promoted: false,
+        createdAt: "now",
+        fixtureOutcomes: { f: { baseline: false, candidate: true } },
+        usage: { inputTokens: 1, outputTokens: 2, costUsd: 0.01 },
+      },
+    );
+    for (const value of [
+      "Baseline-to-candidate diff",
+      "Evidence hash",
+      "Fixture outcomes",
+      "Usage",
+      "Automatic promotion: disabled",
+    ])
+      expect(text).toContain(value);
   });
 });
