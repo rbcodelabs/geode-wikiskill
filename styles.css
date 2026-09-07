@@ -1,0 +1,10 @@
+.wikiskill-shell{--ws-accent:#62d6b5;padding:24px;color:var(--text-normal);font-family:var(--font-interface)}
+.wikiskill-shell header{position:relative;padding:22px;border:1px solid var(--background-modifier-border);border-radius:16px;background:linear-gradient(135deg,var(--background-secondary),var(--background-primary))}
+.wikiskill-shell h1{margin:4px 0 8px;font-size:28px}.wikiskill-shell .eyebrow{color:var(--ws-accent);font-weight:700;letter-spacing:.12em;font-size:11px}
+.wikiskill-shell .status{position:absolute;right:20px;top:20px;padding:5px 10px;border-radius:999px;background:var(--background-modifier-hover)}
+.wikiskill-shell .status-full{color:var(--ws-accent)}.wikiskill-shell .status-offline{color:var(--text-error)}
+.wikiskill-shell nav{display:flex;gap:8px;overflow:auto;margin:18px 0}.wikiskill-shell nav button{border:0;border-radius:8px;padding:8px 12px;background:var(--background-secondary);color:var(--text-muted)}
+.wikiskill-actions{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px}.wikiskill-actions button{border:1px solid var(--background-modifier-border);border-radius:8px;padding:7px 10px;background:transparent;color:var(--text-normal)}
+.wikiskill-shell main{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.wikiskill-shell section{min-height:105px;padding:16px;border:1px solid var(--background-modifier-border);border-radius:12px;background:var(--background-primary-alt)}
+.wikiskill-shell section h2{font-size:14px;margin:0 0 12px}.wikiskill-shell section p{color:var(--text-muted);line-height:1.5}
+@media(max-width:500px){.wikiskill-shell{padding:12px}.wikiskill-shell header{padding:16px}.wikiskill-shell .status{position:static;display:inline-block;margin-top:8px}.wikiskill-shell main{grid-template-columns:1fr}}

@@ -1,0 +1,10 @@
+{
+  "id": "geode-wikiskill",
+  "name": "WikiSkill Evolution",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Compiles agent experience into reviewed, evaluated skill proposals.",
+  "author": "RB Code Labs",
+  "authorUrl": "https://github.com/rbcodelabs",
+  "isDesktopOnly": true
+}

@@ -1,0 +1,23 @@
+{
+  "name": "geode-wikiskill",
+  "version": "0.1.0",
+  "description": "Persistent experience compilation and governed skill evolution for Geode",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:screenshots": "playwright test",
+    "test:screenshots:update": "playwright test --update-snapshots"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.28.0",
+    "jsdom": "^26.0.0",
+    "obsidian": "^1.7.2",
+    "typescript": "^5.7.0",
+    "vitest": "^4.1.5"
+  }
+}
