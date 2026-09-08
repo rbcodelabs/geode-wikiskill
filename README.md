@@ -4,6 +4,8 @@ WikiSkill Evolution is a desktop-only Geode/Obsidian-compatible plugin that turn
 
 It never edits or activates a skill. Agent Threads owns raw traces and constrained execution; WikiSkill stores only sanitized evidence-derived knowledge and review artifacts.
 
+This work is based on [“WikiSkill: Compiling Agent Experience into Persistent Knowledge for Skill Evolution”](https://arxiv.org/abs/2608.27454) by Liyan Tang, Cyrus Rashtchian, Chun-Sung Ferng, Andrew Tomkins, Da-Cheng Juan, and Tu Vu (arXiv:2608.27454). This pilot adapts the paper’s separation of raw experience, persistent knowledge, and executable skills while adding Geode-specific consent, constrained execution, deterministic and holdout evaluation, and human-only promotion.
+
 ## Pilot status
 
 The first governed scope is Agentic PM Playbook's `integration-routing` skill. This repository contains a complete vertical plugin pilot and a pinned structural Agent Threads API adapter while the additive provider contract is finalized.
