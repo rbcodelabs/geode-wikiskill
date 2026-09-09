@@ -4,10 +4,6 @@ export type DependencyStatus = "offline" | "read-only" | "full";
 const TRACE_CAPABILITIES = ["traces.listSources", "traces.readChunk"];
 const REQUIRED_FULL = [
   ...TRACE_CAPABILITIES,
-  "threads.create",
-  "threads.send",
-  "threads.wait",
-  "threads.cancel",
   "constrainedRuns.create",
   "constrainedRuns.wait",
   "constrainedRuns.cancel",

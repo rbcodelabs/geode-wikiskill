@@ -122,7 +122,7 @@ describe("state", () => {
         },
       ],
     });
-    expect(state.schemaVersion).toBe(3);
+    expect(state.schemaVersion).toBe(4);
     expect(state.budget.usedTokens).toBe(0);
     expect(state.importProgress.scannedSources).toBe(0);
     expect(state.evaluations).toEqual([]);
@@ -302,7 +302,7 @@ describe("dashboard", () => {
     ])
       expect(html).toContain(label);
     for (const action of [
-      "Import evidence",
+      "Scan vault",
       "Compile patterns",
       "Propose candidate",
       "Evaluate",

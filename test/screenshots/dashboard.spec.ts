@@ -6,12 +6,14 @@ const model = {
   status: "full" as const,
   imported: 24,
   redactions: 5,
+  skills:[{id:'document-export',name:'document-export',path:'/skills/document-export/SKILL.md'}],
+  evidence:[{id:'a',skill:'document-export',action:'Export timeout',outcome:'failure' as const,sourcePath:'Activity/export-run.md',sourceLine:12,inferred:true}],
   patterns: [
     {
       id: "p1",
-      skill: "integration-routing",
-      action: "Resolve each capability independently",
-      confidence: "strong" as const,
+      skill: "document-export",
+      action: "Document export timed out repeatedly",
+      confidence: "medium" as const,
       evidence: ["a", "b", "c"],
       counterexamples: ["d"],
       updatedAt: "2026-09-07",
@@ -20,13 +22,14 @@ const model = {
   candidates: [
     {
       id: "candidate-1",
-      skill: "integration-routing",
-      content: "Resolve routing capabilities independently.",
-      baselineContent: "Route every capability through one provider.",
-      rationale: "Three successes and one counterexample.",
+      skill: "document-export",
+      content: "Check the destination before exporting documents.",
+      baselineContent: "Export the document.",
+      rationale: "Two inferred timeout reports; one successful retry.",
       evidenceHash: "evidence-abc",
       createdAt: "2026-09-07",
       status: "review" as const,
+      verification:'Independent exact-output scenarios: 0 → 1. Limited sample; not proof of general improvement.',
     },
   ],
   evaluations: [
@@ -34,13 +37,13 @@ const model = {
       id: "eval-1",
       candidateId: "candidate-1",
       decision: "review" as const,
-      baselineScore: 0.6,
-      candidateScore: 0.9,
+      baselineScore: 0,
+      candidateScore: 1,
       failures: [],
       promoted: false as const,
       createdAt: "2026-09-07",
       contractHash: "contract-abc",
-      fixtureOutcomes: { routing: { baseline: false, candidate: true } },
+      fixtureOutcomes: { destination: { baseline: false, candidate: true } },
       usage: { inputTokens: 120, outputTokens: 30, costUsd: 0.012 },
     },
   ],
@@ -64,6 +67,8 @@ test("dashboard renders complete desktop information architecture", async ({
     page.getByRole("heading", { name: "WikiSkill Evolution" }),
   ).toBeVisible();
   await expect(page.locator("section")).toHaveCount(7);
+  await expect(page.getByRole("button",{name:"Approve for export"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Scan vault"})).toBeVisible();
   await expect(page.locator(".wikiskill-shell")).toHaveScreenshot(
     "dashboard-desktop.png",
     { animations: "disabled" },

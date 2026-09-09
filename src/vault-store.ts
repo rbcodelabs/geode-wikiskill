@@ -51,8 +51,12 @@ export class VaultWikiStore {
           renderReview(candidate, evaluation),
         );
     }
+    for(const candidate of state.candidates.filter(c=>c.status==='approved')) {
+      await this.put(`${root}/approved/${segment(candidate.id)}.md`, `<!-- wikiskill-generated -->\n# Approved proposal: ${candidate.skill}\n\n${candidate.verification ?? 'Unverified'}\n\nSource hash: ${candidate.sourceHash ?? 'new guidance'}\n\nEvidence sources: ${(candidate.sourceEvidence??[]).map(e=>e.path+' ('+e.hash+')').join(', ')}\n\n${candidate.rationale ?? ''}\n\n## Proposed content (not activated)\n\n${candidate.content}`);
+    }
   }
   private async put(path: string, content: string): Promise<void> {
+    content = '<!-- wikiskill-generated -->\n'+content;
     const normalized = normalizePath(path);
     const parent = normalized.slice(0, normalized.lastIndexOf("/"));
     if (parent && !this.vault.getAbstractFileByPath(parent))

@@ -12,6 +12,7 @@ export class FakeThreadsApi implements ThreadsApiV1 {
   private constrained = new Map<string, ConstrainedRunResult>();
   private threadRuns = new Map<string, RunResult>();
   cancelledThreadRuns: string[] = [];
+  cancelledConstrainedRuns: string[] = [];
   private sourceCount: number;
   private sourcePageSize: number;
   private eventCount = 4;
@@ -187,7 +188,7 @@ export class FakeThreadsApi implements ThreadsApiV1 {
       this.constrained.set(runId, {
         status: "completed",
         runId,
-        output: systemInstructions.includes("candidate improvement")
+        output: systemInstructions.includes("You draft skill improvements") ? '{"content":"candidate improvement"}' : systemInstructions.includes("candidate improvement")
           ? '{"ok":true}'
           : '{"ok":false}',
         model: "test",
@@ -196,6 +197,6 @@ export class FakeThreadsApi implements ThreadsApiV1 {
       return { runId };
     },
     wait: async (runId: string) => this.constrained.get(runId)!,
-    cancel: async (runId: string) => this.constrained.get(runId)!,
+    cancel: async (runId: string) => {this.cancelledConstrainedRuns.push(runId);return this.constrained.get(runId)!;},
   };
 }

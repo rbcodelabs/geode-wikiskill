@@ -2,35 +2,32 @@
 
 ## Boundaries
 
-```mermaid
-flowchart LR
-  T[Agent Threads API] -->|sanitized cursor chunks| W[WikiSkill plugin]
-  W -->|background authoring job| T
-  W -->|paired constrained runs| T
-  P[Agentic PM Playbook] -->|purpose + eval contract| W
-  W -->|patterns + review packets| V[Geode vault]
-  W -. never mutates .-> P
-```
+WikiSkill owns discovery, friction analysis, accumulated knowledge, evaluation scenarios, proposal state, and review artifacts. Installed skills are read-only inputs. No package-specific contract is required, and no Agentic PM package is a runtime dependency.
 
-- **Agent Threads** owns trace semantics, first-pass redaction, authoring threads, constrained execution, usage, cancellation, and durable idempotency.
-- **WikiSkill** owns consent, eligibility, second-pass redaction, cursors, compilation, candidates, grading, scheduling, and review artifacts.
-- **Agentic PM Playbook** owns canonical skills, purpose statements, fixtures, graders, invariants, and promotion through its normal PR workflow.
-- **Geode** supplies the Obsidian-compatible plugin, vault, workspace, command, and settings APIs. No core change is required.
+The host supplies vault, workspace, settings, and plugin lifecycle APIs. Agent Threads supplies optional sanitized execution traces and constrained model execution. Local discovery and scanning remain available when that provider is offline.
 
-## Runtime states
+## Data flow
 
-The Threads adapter is a soft dependency. It registers lifecycle listeners before discovery, accepts only API major v1, captures a generation fence, and exposes `offline`, `read-only`, and `full` states. A generation change invalidates the cached provider immediately. Jobs use caller-owned IDs and one background thread per job.
+1. Discover skills from conventional and explicitly configured directories, preserving source identity and a content hash.
+2. Scan bounded batches of vault Markdown and optionally import consented Agent Threads traces.
+3. Redact evidence and preserve source references. Distinguish inferred vault observations from provider-attributed execution outcomes.
+4. Group friction into patterns with supporting observations and counterexamples.
+5. Request a proposal through a constrained run, supplying relevant evidence and the discovered baseline where available.
+6. Record evaluation or an explicit unverified result, and present the proposal for human review.
+7. Export review material. Applying it to a maintained skill remains a separate action.
 
-## Data lifecycle
+## Persistence
 
-Plugin operational state is schema-versioned in `data.json`. Candidate drafts live only there and in explicit review packets, outside active skill roots. Knowledge is rendered under `Agent Knowledge/Skill Evolution/`, with pattern notes, an evolution log, impact history, and review packets.
+Schema-versioned plugin state stores discovery results, scan progress, evidence, patterns, jobs, proposals, review decisions, and budget data. A document's content hash identifies the version that produced its evidence. Source changes invalidate the corresponding observations when revisited. Scan cursors allow bounded batches to advance across the vault.
 
-Per-source cursor advancement happens only in the same persisted state update as sanitized evidence. Provider-owned revision and content hashes fence every source. Events without source-owned `invokedSkill` attribution are discarded. Candidate and evaluation records bind evidence, canonical skill, PURPOSE, contract, and fixture hashes and carry a terminal `promoted: false`.
+Knowledge output is excluded from subsequent scans to prevent a proposal from becoming evidence for itself. Output-root history and generated-content markers support this exclusion when settings or note locations change.
 
-Successful skill loading is not treated as task success. Invocation text is retained as an unknown-outcome observation, and only the provider-correlated terminal `skillRunOutcomes` record upgrades that invocation to success or failure. EOF continuation cursors are retained for same-revision appends. Source scanning is bounded by sources, bytes, and events, with a persisted source-page cursor preventing later sources from starving.
+## Execution boundary
 
-The plugin registers a bounded fifteen-minute interval because the Agent Threads cron surface cannot invoke another plugin's callback. Retention runs and persists before dependency and empty-queue checks. Work then shares a persisted UTC-day budget and per-skill lock with manual authoring/evaluation, skips an empty import, and runs the versioned Maintainer job.
+`src/threads-contract.ts` contains the structural subset of the Agent Threads public API consumed by the plugin. `src/threads-adapter.ts` handles provider discovery, capabilities, and lifecycle. Skill discovery uses filesystem locations rather than private Agent Threads settings.
 
-## Contract isolation
+Authoring and model comparisons require constrained execution. Input includes untrusted evidence; ordinary host-capable threads are not a substitute. Review approval is separate from execution and does not grant permission to write installed skills.
 
-`src/threads-contract.ts` pins the consumed subset of Agent Threads `api/public-api-v1.d.ts` (attribution/content-hash contract `c0b4bd1`) and `src/threads-adapter.ts` owns discovery/lifecycle behavior. Contract alignment does not leak provider implementation types through the compiler, evaluator, UI, or state models.
+## Limitations
+
+The initial scanner uses text rules, not a comprehensive semantic analysis of the entire vault. Skill associations and friction explanations require human judgment. Evaluation scenarios stored by WikiSkill can demonstrate behavior for those cases, but generated cases do not constitute independent proof of general improvement. UI and reports must preserve that distinction.

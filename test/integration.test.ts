@@ -231,7 +231,8 @@ describe("vertical pilot", () => {
     await new JobQueue(adapter, (_id, cancel) => {
       if (cancel) void cancel();
     }).propose("integration-routing", "evidence");
-    expect(api.cancelledThreadRuns).toEqual(["author-run"]);
+    expect(api.cancelledConstrainedRuns).toHaveLength(1);
+    expect(api.cancelledThreadRuns).toHaveLength(0);
   });
   it("retries byte-identical stored authoring input under the stable job identity", async () => {
     const api = new FakeThreadsApi();

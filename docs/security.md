@@ -1,23 +1,23 @@
 # Security model
 
-Trace content is untrusted. It can contain prompt injection, secrets, personal information, misleading success claims, or instructions designed to alter the evaluator. WikiSkill treats it as evidence, never as executable instructions.
+Vault text, traces, installed skill text, and model outputs are untrusted inputs. They can contain secrets, identifying information, incorrect claims, or prompt injection. A friction finding is evidence for review, not an instruction to execute.
 
-## Controls
+## Reading and storage
 
-- No project is imported without explicit project-ID consent.
-- Events with origin `geode-wikiskill` are excluded by both the provider request and consumer validation.
-- Agent Threads must sanitize trace events; WikiSkill obtains configured values by ID from Geode Secret Storage and performs a second pass for those secrets, tokens, email addresses, SSNs, and credential assignments. Secret values never enter plugin state. Import blocks if the storage or a configured ID is unavailable.
-- Authoring prompts wrap trace-derived text in an explicit untrusted evidence boundary and require schema-validated JSON.
-- Candidates are never placed in any active skill root and are never loaded into an evaluator implicitly.
-- Baseline and candidate run independently for every public and holdout fixture through `constrainedRuns`. Outputs must be JSON matching each closed schema and are graded locally by the named deterministic grader. Idempotency binds all content, contract, fixture, role, and execution hashes.
-- Critical fixture regressions, equal results, and insufficient gains are rejected.
-- Evaluation can only produce `reject` or `review`; there is no activation, merge, push, or release capability.
-- Absolute raw-log paths and provider credentials are absent from the structural API contract.
+- Users control excluded vault folders and additional skill directories. Trace import additionally requires project-ID consent.
+- Discovery reads installed skills without modifying them. WikiSkill keeps its operational and evaluation data in its own storage.
+- Scan work is bounded and excludes WikiSkill output and host configuration folders. Generated-output markers prevent exported notes from being recycled as new evidence.
+- Configured redaction values are resolved through secret storage. Missing configured values must block processing rather than silently reduce redaction.
+- Source references and content hashes support evidence inspection and stale-proposal checks.
 
-## Provider trust requirement
+## Execution and review
 
-The constrained-run provider must enforce no filesystem, tools, MCP servers, skills, settings sources, or session persistence. WikiSkill refuses to substitute ordinary threads for evaluation. Provider canary tests belong to Agent Threads, not this consumer plugin.
+- Authoring and comparison runs use the Agent Threads constrained execution API. The provider must prevent access to host tools, filesystem, MCP servers, installed skills, and host settings. WikiSkill does not substitute an ordinary thread when constrained execution is unavailable.
+- Local scanning does not require a model call. Model actions consume the configured budget.
+- A successful source check is not a behavioral evaluation. Untested proposals remain explicitly unverified; comparison results apply only to their scenarios.
+- Approval, dismissal, and deferral are review decisions. WikiSkill does not automatically modify or activate a skill or publish a repository change.
+- Review exports contain proposal material and evidence references; they require inspection before being shared.
 
 ## Residual risks
 
-Pattern text may still contain identifying context that deterministic redaction cannot recognize, so review packets require human inspection. Operational retention removes expired evidence, candidates, and evaluations on every scheduler cycle—including cycles with no import work or a provider failure. Configurable entity detection remains a possible follow-up after the pilot establishes acceptable false-positive and false-negative rates.
+Pattern matching cannot recognize every secret or identifying detail. Local friction rules can also misread quotations, negations, or unrelated events. Constrained execution limits access but does not establish that a model's proposal is correct. Human review and independent evaluation cases remain important when deciding whether to apply a proposed change.
