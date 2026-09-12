@@ -23,7 +23,7 @@ vi.mock('obsidian', () => ({
 }));
 import WikiSkillPlugin from '../src/main';
 describe('installed plugin learning flow', () => {
-    it('scans non-PM evidence then proposes through isolated provider, reviews, exports and rejects stale sources', async () => {
+    it('scans non-PM evidence then proposes through visible conversations, reviews, exports and rejects stale sources', async () => {
         vi.stubGlobal('window', { setInterval: () => 1 });
         const api = new FakeThreadsApi();
         const files = [{ path: 'activity.md', stat: { size: 100 } }];
@@ -38,7 +38,8 @@ describe('installed plugin learning flow', () => {
         expect(plugin.state.patterns).toHaveLength(1);
         const ordinary = vi.spyOn(api.threads, 'create');
         await plugin.propose();
-        expect(ordinary).not.toHaveBeenCalled();
+        expect(ordinary).toHaveBeenCalledTimes(1);
+        const open=vi.spyOn(api.threads,'open');await plugin.openJobThread(plugin.state.jobs[0]!.id);expect(open).toHaveBeenCalledWith(plugin.state.jobs[0]!.externalThreadId);
         expect(plugin.state.candidates).toHaveLength(1);
         const candidate = plugin.state.candidates[0]!;
         expect(candidate.sourceEvidence?.[0]?.hash).toBe(hash(text));

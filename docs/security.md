@@ -12,7 +12,7 @@ Vault text, traces, installed skill text, and model outputs are untrusted inputs
 
 ## Execution and review
 
-- Authoring and comparison runs use the Agent Threads constrained execution API. The provider must prevent access to host tools, filesystem, MCP servers, installed skills, and host settings. WikiSkill does not substitute an ordinary thread when constrained execution is unavailable.
+- Authoring and comparison runs use normal visible Agent Threads conversations with the user's existing authentication and configured provider/model. They have normal host permissions and context, including available tools. They are not isolated or sandboxed. Prompts request analysis/proposals only and no file edits or skill application; these instructions do not enforce a capability boundary.
 - Local scanning does not require a model call. Model actions consume the configured budget.
 - A successful source check is not a behavioral evaluation. Untested proposals remain explicitly unverified; comparison results apply only to their scenarios.
 - Approval, dismissal, and deferral are review decisions. WikiSkill does not automatically modify or activate a skill or publish a repository change.
@@ -20,4 +20,4 @@ Vault text, traces, installed skill text, and model outputs are untrusted inputs
 
 ## Residual risks
 
-Pattern matching cannot recognize every secret or identifying detail. Local friction rules can also misread quotations, negations, or unrelated events. Constrained execution limits access but does not establish that a model's proposal is correct. Human review and independent evaluation cases remain important when deciding whether to apply a proposed change.
+Pattern matching cannot recognize every secret or identifying detail. Local friction rules can also misread quotations, negations, or unrelated events. Normal conversations may use host context and tools, so compare results as contextual samples rather than controlled isolated experiments. Human review and independent evaluation cases remain important when deciding whether to apply a proposed change.

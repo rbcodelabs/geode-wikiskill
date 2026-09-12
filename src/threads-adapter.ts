@@ -3,10 +3,11 @@ import type { ThreadsApiV1, ThreadsPluginShape } from "./threads-contract";
 export type DependencyStatus = "offline" | "read-only" | "full";
 const TRACE_CAPABILITIES = ["traces.listSources", "traces.readChunk"];
 const REQUIRED_FULL = [
-  ...TRACE_CAPABILITIES,
-  "constrainedRuns.create",
-  "constrainedRuns.wait",
-  "constrainedRuns.cancel",
+  "threads.create",
+  "threads.send",
+  "threads.wait",
+  "threads.cancel",
+  "threads.open",
 ];
 
 export class ThreadsAdapter {

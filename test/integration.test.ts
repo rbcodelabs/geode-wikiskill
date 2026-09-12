@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { ThreadsAdapter } from "../src/threads-adapter";
 import { TraceImporter } from "../src/importer";
 import { JobQueue } from "../src/jobs";
@@ -228,11 +228,12 @@ describe("vertical pilot", () => {
       new EventTarget(),
     );
     adapter.start();
-    await new JobQueue(adapter, (_id, cancel) => {
-      if (cancel) void cancel();
-    }).propose("integration-routing", "evidence");
-    expect(api.cancelledConstrainedRuns).toHaveLength(1);
-    expect(api.cancelledThreadRuns).toHaveLength(0);
+    let cancelRun:(()=>Promise<void>)|undefined;
+    const originalWait=api.threads.wait;
+    vi.spyOn(api.threads,'wait').mockImplementation(async id=>{await cancelRun?.();return originalWait(id);});
+    await expect(new JobQueue(adapter, (_id, cancel) => {cancelRun=cancel;}).propose("integration-routing", "evidence")).rejects.toThrow(/Cancelled/);
+    expect(api.cancelledConstrainedRuns).toHaveLength(0);
+    expect(api.cancelledThreadRuns).toHaveLength(1);
   });
   it("retries byte-identical stored authoring input under the stable job identity", async () => {
     const api = new FakeThreadsApi();

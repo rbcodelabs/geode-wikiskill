@@ -4,7 +4,7 @@
 
 WikiSkill owns discovery, friction analysis, accumulated knowledge, evaluation scenarios, proposal state, and review artifacts. Installed skills are read-only inputs. No package-specific contract is required, and no Agentic PM package is a runtime dependency.
 
-The host supplies vault, workspace, settings, and plugin lifecycle APIs. Agent Threads supplies optional sanitized execution traces and constrained model execution. Local discovery and scanning remain available when that provider is offline.
+The host supplies vault, workspace, settings, and plugin lifecycle APIs. Agent Threads supplies optional sanitized execution traces and normal visible conversations. Local discovery and scanning remain available when that provider is offline.
 
 ## Data flow
 
@@ -12,7 +12,7 @@ The host supplies vault, workspace, settings, and plugin lifecycle APIs. Agent T
 2. Scan bounded batches of vault Markdown and optionally import consented Agent Threads traces.
 3. Redact evidence and preserve source references. Distinguish inferred vault observations from provider-attributed execution outcomes.
 4. Group friction into patterns with supporting observations and counterexamples.
-5. Request a proposal through a constrained run, supplying relevant evidence and the discovered baseline where available.
+5. Request a proposal through a normal visible conversation, supplying relevant evidence and the discovered baseline where available.
 6. Record evaluation or an explicit unverified result, and present the proposal for human review.
 7. Export review material. Applying it to a maintained skill remains a separate action.
 
@@ -26,7 +26,7 @@ Knowledge output is excluded from subsequent scans to prevent a proposal from be
 
 `src/threads-contract.ts` contains the structural subset of the Agent Threads public API consumed by the plugin. `src/threads-adapter.ts` handles provider discovery, capabilities, and lifecycle. Skill discovery uses filesystem locations rather than private Agent Threads settings.
 
-Authoring and model comparisons require constrained execution. Input includes untrusted evidence; ordinary host-capable threads are not a substitute. Review approval is separate from execution and does not grant permission to write installed skills.
+Authoring and model comparisons use ordinary visible Agent Threads conversations. The public create call omits harness/model overrides, inheriting the user's configured provider, model, authentication, and effective workspace. These conversations have normal host permissions, tools, and context; they are not sandboxed or isolated. Prompts request analysis only and prohibit applying changes, but that is an instruction rather than a security boundary. Review approval is separate from execution and does not grant permission to write installed skills.
 
 ## Limitations
 

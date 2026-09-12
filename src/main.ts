@@ -54,7 +54,8 @@ export default class WikiSkillPlugin extends Plugin {
             await this.persist();
         const actions = new WikiSkillPluginActionTarget({
             importEvidence: () => this.scanVault(),
-            review: (id, status) => this.review(id, status),
+                review: (id, status) => this.review(id, status),
+                openThread: id => this.openJobThread(id),
             compile: () => this.compile(),
             propose: () => this.propose(),
             evaluateLatest: () => this.evaluateLatest(),
@@ -292,13 +293,13 @@ export default class WikiSkillPlugin extends Plugin {
             const run = await this.scheduler.run(c.skill, scenarios.reduce((n, s) => n + Math.ceil((c.baselineContent!.length + c.content.length + s.prompt.length * 2) / 3) + 8192, 0), () => this.scopeLock.run(c.skill, () => evaluateScenarios(this.adapter.requireApi(), c.baselineContent!, c.content, scenarios, cancel => { if (cancel)
                 this.activeCancels.set(id, cancel);
             else
-                this.activeCancels.delete(id); })));
+                this.activeCancels.delete(id); },{jobs:this.state.jobs,persist:()=>this.persist(),candidateId:c.id})));
             if (!run.value)
                 throw new Error('Daily budget exhausted or evaluation already running');
             const r = run.value;
             const regressions = Object.entries(r.fixtureOutcomes).filter(([, v]) => v.baseline && !v.candidate).map(([id]) => id);
             this.state.evaluations.push({ id: id + '-' + Date.now(), candidateId: c.id, decision: regressions.length ? 'reject' : 'review', ...r, failures: regressions, promoted: false, createdAt: new Date().toISOString(), canonicalSkillHash: c.sourceHash, contractHash: hash(JSON.stringify(scenarios)) });
-            c.verification = `Independent exact-output scenarios: ${r.baselineScore} → ${r.candidateScore}. ${regressions.length} regressions. This limited sample does not prove general improvement.`;
+            c.verification = `Contextual exact-output comparison: ${r.baselineScore} → ${r.candidateScore}. ${regressions.length} regressions. Normal host context and permissions apply; this limited sample is not an isolated test or proof of general improvement.`;
         }
         catch (error) {
             c.verification = 'Unverified: ' + (error instanceof Error ? error.message : 'evaluation failed');
@@ -314,6 +315,11 @@ export default class WikiSkillPlugin extends Plugin {
         reviewCandidate(this.state, id, status);
         await this.persist();
     }
+    async openJobThread(id:string):Promise<void> {
+        const job=this.state.jobs.find(j=>j.id===id);
+        if(!job?.externalThreadId || job.executionMode!=='normal-v1') throw new Error('No normal conversation is available for this job');
+        await this.adapter.requireApi().threads.open(job.externalThreadId);
+    }
     private async verifyEvidence(candidate: import('./model').Candidate): Promise<void> {
         for (const source of candidate.sourceEvidence ?? []) {
             const file = this.app.vault.getFileByPath(source.path);
@@ -322,6 +328,8 @@ export default class WikiSkillPlugin extends Plugin {
         }
     }
     async retry(): Promise<void> {
+        const failed=[...this.state.jobs].reverse().find(j=>j.status==='failed');
+        if(failed?.executionMode==='normal-v1' && failed.type==='evaluate' && failed.input.candidateId) {await this.evaluateLatest(failed.input.candidateId);return;}
         // Rebuild provenance from current sources; never append a bare queue retry result.
         await this.propose();
         return;
@@ -459,7 +467,7 @@ class WikiSkillSettings extends PluginSettingTab {
         new Setting(this.containerEl).setName('Scan every 15 minutes').setDesc('Local incremental scans; proposals require a separate action.').addToggle(toggle => toggle.setValue(this.plugin.state.settings.scheduledScan).onChange(async (value) => { this.plugin.state.settings.scheduledScan = value; await this.plugin.persist(); }));
         new Setting(this.containerEl).setName('Independent evaluation scenarios').setDesc('JSON array of {id,prompt,expected}; 1–10 cases for the latest candidate. Exact-output checks run on baseline and candidate; keep these independent of proposal generation.').addTextArea(text => text.setValue(this.plugin.state.settings.scenarioJson).onChange(async (value) => { this.plugin.state.settings.scenarioJson = value; await this.plugin.persist(); }));
         for (const [key, label] of [['dailyTokenBudget', 'Daily token reservation budget'], ['importLimit', 'Files per scan']] as const)
-            new Setting(this.containerEl).setName(label).setDesc(key === 'dailyTokenBudget' ? 'Estimates reserve daily capacity; not a measured-token ceiling. Each model call is capped at $0.10.' : 'Positive integer; scans also enforce byte limits.').addText(text => text.setValue(String(this.plugin.state.settings[key])).onChange(async (value) => { const n = Number(value); if (Number.isSafeInteger(n) && n > 0) {
+            new Setting(this.containerEl).setName(label).setDesc(key === 'dailyTokenBudget' ? 'Estimated admission budget only; normal conversations use host model limits and may exceed estimates. No WikiSkill per-call dollar cap.' : 'Positive integer; scans also enforce byte limits.').addText(text => text.setValue(String(this.plugin.state.settings[key])).onChange(async (value) => { const n = Number(value); if (Number.isSafeInteger(n) && n > 0) {
                 this.plugin.state.settings[key] = n;
                 await this.plugin.persist();
             } }));

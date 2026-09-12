@@ -1,5 +1,6 @@
 import type { DashboardActionTarget } from "./dashboard";
 interface Operations {
+    openThread?(id:string):Promise<void>;
     review?(id: string, status: 'approved' | 'dismissed' | 'deferred'): Promise<void>;
     importEvidence(): Promise<void>;
     compile(): Promise<void>;
@@ -15,6 +16,7 @@ interface ExportDependencies {
 }
 /** Production action boundary used by WikiSkillView and injectable in host-shim tests. */
 export class WikiSkillPluginActionTarget implements DashboardActionTarget {
+    async openThread(id:string):Promise<void>{await this.operations.openThread?.(id);}
     async review(id: string, status: 'approved' | 'dismissed' | 'deferred'): Promise<void> { await this.operations.review?.(id, status); }
     constructor(private readonly operations: Operations, private readonly exportDependencies: ExportDependencies) { }
     importEvidence(): Promise<void> {
