@@ -14,6 +14,10 @@ export interface DashboardModel {
     candidates: Candidate[];
     evaluations: EvaluationRecord[];
     jobs?: Array<{
+        externalThreadId?:string;
+        externalRunId?:string;
+        executionMode?:'normal-v1';
+        error?:string;
         id: string;
         status: string;
         type: string;
@@ -67,7 +71,7 @@ export function renderDashboard(model: DashboardModel): string {
             "Jobs",
             model.jobs?.length
                 ? model.jobs
-                    .map((j) => `${escape(j.id)} — ${escape(j.type)} — ${escape(j.status)}`)
+                .map((j) => `${escape(j.id)} — ${escape(j.type)} — ${escape(j.status)}${j.error?'<br>'+escape(j.error):''}${j.externalThreadId&&j.executionMode==='normal-v1'?`<br>Thread: ${escape(j.externalThreadId)}<br><button data-action="open-thread:${escape(j.id)}">Open thread</button>`:''}`)
                     .join("<br>")
                 : "No jobs",
         ],
@@ -91,6 +95,7 @@ export function renderDashboard(model: DashboardModel): string {
     return `<div class="wikiskill-shell"><header><p class="eyebrow">AGENT KNOWLEDGE</p><h1>WikiSkill Evolution</h1><p>Evidence becomes reviewable skill improvements—never automatic changes.</p><span class="status status-${model.status}">${status}</span></header><nav>${cards.map(([title]) => `<button type="button" data-section="${title.toLowerCase()}">${title}</button>`).join("")}</nav><div class="wikiskill-actions">${actions.map((action) => `<button type="button" data-action="${action.toLowerCase().replace(/ /g, "-")}">${action}</button>`).join("")}</div><main>${cards.map(([title, body]) => `<section id="wikiskill-${title.toLowerCase()}"><h2>${title}</h2><p>${body}</p></section>`).join("")}</main></div>`;
 }
 export interface DashboardActionTarget {
+    openThread?(id:string):Promise<void>;
     review?(id: string, status: 'approved' | 'dismissed' | 'deferred'): Promise<void>;
     importEvidence(): Promise<void>;
     compile(): Promise<void>;
@@ -101,6 +106,7 @@ export interface DashboardActionTarget {
     exportReviewPackets(): Promise<void>;
 }
 export async function dispatchDashboardAction(target: DashboardActionTarget, action: string): Promise<void> {
+    if(action.startsWith('open-thread:')) {await target.openThread?.(action.slice('open-thread:'.length));return;}
     if (action.startsWith('review:')) {
         const [, status, ...parts] = action.split(':');
         if (['approved', 'dismissed', 'deferred'].includes(status!))

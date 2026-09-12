@@ -50,6 +50,8 @@ export async function evaluateCandidate(
   candidate: string,
   setCancellation: (cancel?: () => Promise<void>) => void = () => undefined,
 ) {
+  const constrained = adapter.requireApi().constrainedRuns;
+  if (!constrained) throw new Error('Legacy governed evaluator requires constrained execution; use normal scenario comparisons');
   if (contract.manifest.skillId !== "integration-routing")
     throw new Error("Candidate skill ID does not match pilot scope");
   if (
@@ -89,7 +91,7 @@ export async function evaluateCandidate(
           executionHash,
         ].join("\0"),
       );
-      const created = await adapter.requireApi().constrainedRuns.create({
+      const created = await constrained.create({
         ownerPluginId: "geode-wikiskill",
         idempotencyKey: key,
         harness: "claude",
@@ -101,11 +103,9 @@ export async function evaluateCandidate(
         timeoutMs: fixture.execution.timeoutSeconds * 1000,
       });
       setCancellation(async () => {
-        await adapter.requireApi().constrainedRuns.cancel(created.runId);
+        await constrained.cancel(created.runId);
       });
-      const result = await adapter
-        .requireApi()
-        .constrainedRuns.wait(created.runId, {
+      const result = await constrained.wait(created.runId, {
           timeoutMs: fixture.execution.timeoutSeconds * 1000,
         });
       if (result.status !== "completed")

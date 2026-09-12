@@ -6,7 +6,7 @@ This work is based on [“WikiSkill: Compiling Agent Experience into Persistent 
 
 ## Getting started
 
-For the published v0.1.0 release, install BRAT and add `rbcodelabs/geode-wikiskill` as a beta plugin, then enable WikiSkill Evolution. Local scans work independently; install Agent Threads v0.38.0 or later for its local skill authoring workflow and model execution. Building from source remains available below.
+For the published v0.1.1 release, install BRAT and add `rbcodelabs/geode-wikiskill` as a beta plugin, then enable WikiSkill Evolution. Local scans work independently; install Agent Threads v0.37.1 or later for conversation execution (v0.38.0 adds the local skill authoring workflow). Building from source remains available below.
 
 1. Build the plugin and install `dist/main.js`, `dist/manifest.json`, and `dist/styles.css` in your host's plugin directory. Enable WikiSkill Evolution.
 2. Check WikiSkill settings: exclude folders you do not want scanned and add any skill directories outside the conventional installation locations.
@@ -15,7 +15,7 @@ For the published v0.1.0 release, install BRAT and add `rbcodelabs/geode-wikiski
 5. With a compatible Agent Threads provider available, request a proposal. Review the suggested change and its verification status, then approve, dismiss, or defer it.
 6. Export review material for a separate change to the skill's maintained source. Approval in WikiSkill does not edit or activate an installed skill.
 
-Local scanning and skill discovery work without Agent Threads or any Agentic PM package. Agent Threads supplies optional execution evidence and the constrained model runs used to author proposals and compare candidate behavior.
+Local scanning and skill discovery work without Agent Threads or any Agentic PM package. Agent Threads supplies optional execution evidence and the normal visible Agent Threads conversations used to author proposals and compare candidate behavior.
 
 ## Discovery and scanning
 
@@ -27,9 +27,13 @@ For an approved local SKILL.md improvement with matching frontmatter, export inc
 
 Scanning is incremental and bounded. Folder exclusions are vault-relative paths, not glob patterns. WikiSkill excludes its own knowledge output and host configuration folders. Optional scheduled scanning runs every fifteen minutes; proposals are requested separately. Trace import requires consent for the relevant Agent Threads project IDs.
 
-The default scan processes up to 100 files, with a 256 KiB file limit and a 1 MiB batch limit. The daily model budget reserves estimated tokens (50,000 by default), rather than enforcing a measured-token ceiling. Each model call is capped at $0.10. An evaluation uses two calls per scenario. Both files per scan and the daily reservation budget can be changed in settings; scheduled scanning is off by default.
+The default scan processes up to 100 files, with a 256 KiB file limit and a 1 MiB batch limit. The daily model budget reserves estimated tokens (50,000 by default), rather than enforcing a measured-token ceiling. There is no WikiSkill per-call dollar cap; normal host/provider limits apply, and actual usage can exceed the admission estimate. An evaluation uses two calls per scenario. Both files per scan and the daily reservation budget can be changed in settings; scheduled scanning is off by default.
 
 The initial friction detector uses local text rules to find failure, correction, retry, and workaround signals. This can miss implicit frustrations or misinterpret quoted text. Inspect the supporting evidence before accepting a proposed explanation. Behavioral checks and source freshness checks are different: a proposal with no behavioral comparison remains unverified.
+
+## Visible conversations
+
+Proposal and comparison jobs appear as ordinary Agent Threads conversations. Use **Open thread** in WikiSkill's Jobs section to inspect messages or errors. WikiSkill does not open them automatically, switch your model, or require a separate API key. Failed attempts retain thread/run references; retries reconcile existing runs before sending another attempt. Threads use your host's normal effective workspace and permissions. Prompts request analysis only; applying an approved skill remains a separate action.
 
 ## Comparing a proposal
 
@@ -45,7 +49,7 @@ Add independent scenarios in WikiSkill's scenario JSON setting. Each case has a 
 ]
 ```
 
-WikiSkill supports 1–10 cases and runs the original skill and candidate separately. Grading compares the trimmed response to the expected text exactly. Choose cases where that narrow check is useful; it does not grade open-ended quality. Write the cases independently of the proposed answer. Results describe this sample only and do not establish general improvement. With no cases configured, the proposal remains unverified.
+WikiSkill supports 1–10 cases and runs the original skill and candidate in separate visible conversations. These inherit normal host context, so comparisons are contextual rather than isolated. Grading compares the trimmed response to the expected text exactly. Choose cases where that narrow check is useful; it does not grade open-ended quality. Write the cases independently of the proposed answer. Results describe this sample only and do not establish general improvement. With no cases configured, the proposal remains unverified.
 
 ## Storage and review
 

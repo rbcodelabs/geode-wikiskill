@@ -11,6 +11,8 @@ export class FakeThreadsApi implements ThreadsApiV1 {
   readonly capabilities: readonly string[];
   private constrained = new Map<string, ConstrainedRunResult>();
   private threadRuns = new Map<string, RunResult>();
+  private threadCount=0;
+  private runCount=0;
   cancelledThreadRuns: string[] = [];
   cancelledConstrainedRuns: string[] = [];
   private sourceCount: number;
@@ -38,6 +40,7 @@ export class FakeThreadsApi implements ThreadsApiV1 {
       "threads.send",
       "threads.wait",
       "threads.cancel",
+      "threads.open",
       "constrainedRuns.create",
       "constrainedRuns.wait",
       "constrainedRuns.cancel",
@@ -156,14 +159,15 @@ export class FakeThreadsApi implements ThreadsApiV1 {
     },
   };
   threads = {
-    create: async () => ({ threadId: "thread-1" }),
-    send: async () => {
-      const runId = "author-run";
+    open: async (_threadId:string) => {},
+    create: async (_input?:unknown) => ({ threadId: `thread-${++this.threadCount}` }),
+    send: async (threadId:string, input:{prompt:string}) => {
+      const runId = `author-run-${++this.runCount}`;
       this.threadRuns.set(runId, {
         status: "completed",
         runId,
-        threadId: "thread-1",
-        finalMessage: { content: '{"content":"candidate improvement"}' },
+        threadId,
+        finalMessage: { content: input.prompt.startsWith('Contextual skill comparison') ? (input.prompt.includes('candidate improvement') ? '{"ok":true}':'{"ok":false}') : '{"content":"candidate improvement"}' },
       });
       return { runId };
     },

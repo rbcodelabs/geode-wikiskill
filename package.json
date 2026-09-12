@@ -1,6 +1,6 @@
 {
   "name": "geode-wikiskill",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Persistent experience compilation and governed skill evolution for Geode",
   "type": "module",
   "main": "dist/main.js",

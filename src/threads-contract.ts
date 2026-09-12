@@ -81,6 +81,7 @@ export interface ThreadsApiV1 {
   readonly generation: string;
   readonly capabilities: readonly string[];
   readonly threads: {
+    open(threadId:string):Promise<void>;
     create(input: {
       title?: string;
       origin?: string;
@@ -114,7 +115,7 @@ export interface ThreadsApiV1 {
       options?: { readonly cursor?: string; readonly limit?: number },
     ): Promise<TraceChunk>;
   };
-  readonly constrainedRuns: {
+  readonly constrainedRuns?: {
     create(input: {
       ownerPluginId: string;
       idempotencyKey: string;

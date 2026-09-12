@@ -32,6 +32,9 @@ export interface PluginState {
     candidates: Candidate[];
     evaluations: EvaluationRecord[];
     jobs: Array<{
+        executionMode?: 'normal-v1';
+        attempt?: number;
+        outputRejected?: boolean;
         id: string;
         type: "maintainer-v1" | "proposer-v1" | "evaluate";
         skill: string;

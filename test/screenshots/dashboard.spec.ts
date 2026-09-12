@@ -29,7 +29,7 @@ const model = {
       evidenceHash: "evidence-abc",
       createdAt: "2026-09-07",
       status: "review" as const,
-      verification:'Independent exact-output scenarios: 0 → 1. Limited sample; not proof of general improvement.',
+      verification:'Contextual exact-output comparison: 0 → 1. Normal host context; not isolated or proof of general improvement.',
     },
   ],
   evaluations: [
@@ -47,7 +47,7 @@ const model = {
       usage: { inputTokens: 120, outputTokens: 30, costUsd: 0.012 },
     },
   ],
-  jobs: [{ id: "evaluate-candidate-1", type: "evaluate", status: "complete" }],
+  jobs: [{ id: "evaluate-candidate-1", type: "evaluate", status: "complete",executionMode:'normal-v1' as const,externalThreadId:'comparison-thread',externalRunId:'comparison-run' }],
   importProgress: {
     sourcePageCursor: "cts1:next",
     scannedSources: 12,
@@ -79,6 +79,7 @@ test("dashboard renders complete desktop information architecture", async ({
   await expect(page.locator("section")).toHaveCount(7);
   await expect(page.getByRole("button",{name:"Approve for export"})).toBeVisible();
   await expect(page.getByRole("button",{name:"Scan vault"})).toBeVisible();
+  await expect(page.getByRole("button",{name:"Open thread"})).toBeVisible();
   await expect(page.locator(".wikiskill-shell")).toHaveScreenshot(
     "dashboard-desktop.png",
     { animations: "disabled" },
