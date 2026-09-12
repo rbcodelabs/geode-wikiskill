@@ -59,6 +59,16 @@ const model = {
 const theme = `body{margin:0;background:#17191d;color:#e8ecec;font:14px system-ui;--text-normal:#e8ecec;--text-muted:#aeb7bf;--text-error:#ff7b86;--background-primary:#17191d;--background-primary-alt:#1c2025;--background-secondary:#22262c;--background-modifier-border:#343941;--background-modifier-hover:#2d3239}`;
 const css = `<style>${theme}${readFileSync("styles.css", "utf8")}</style>`;
 
+test('dashboard fits a narrow sidebar inside a wide host window',async({page})=>{
+  await page.setContent(css+'<div style="width:280px">'+renderDashboard(model)+'</div>');
+  const sizes=await page.locator('.wikiskill-shell').evaluate(node=>({width:node.clientWidth,scroll:node.scrollWidth}));
+  expect(sizes.scroll).toBeLessThanOrEqual(sizes.width+1);
+  const header=await page.locator('header').boundingBox();
+  const status=await page.locator('.status').boundingBox();
+  const eyebrow=await page.locator('.eyebrow').boundingBox();
+  expect(status!.y).toBeGreaterThan(eyebrow!.y+eyebrow!.height);
+});
+
 test("dashboard renders complete desktop information architecture", async ({
   page,
 }) => {

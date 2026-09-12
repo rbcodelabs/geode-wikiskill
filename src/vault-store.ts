@@ -1,5 +1,6 @@
 import { normalizePath, TFile, type Vault } from "obsidian";
 import type { PluginState } from "./state";
+import { localUpdateHandoff } from './local-integration';
 import {
   renderEvolution,
   renderImpact,
@@ -52,7 +53,10 @@ export class VaultWikiStore {
         );
     }
     for(const candidate of state.candidates.filter(c=>c.status==='approved')) {
-      await this.put(`${root}/approved/${segment(candidate.id)}.md`, `<!-- wikiskill-generated -->\n# Approved proposal: ${candidate.skill}\n\n${candidate.verification ?? 'Unverified'}\n\nSource hash: ${candidate.sourceHash ?? 'new guidance'}\n\nEvidence sources: ${(candidate.sourceEvidence??[]).map(e=>e.path+' ('+e.hash+')').join(', ')}\n\n${candidate.rationale ?? ''}\n\n## Proposed content (not activated)\n\n${candidate.content}`);
+      const target=state.skills.find(s=>s.id===candidate.skill);
+      const payload=localUpdateHandoff(candidate,state.skills.find(s=>s.id===candidate.skill));
+      const handoff=payload?`\n\n## Provisional inert local update handoff\n\nTarget file: ${target?.path}\nAuthored folder: ${state.settings.authoredSkillFolder}\n\nAfter separate authorization, an agent may pass this payload to Agent Threads skills_update_local. Verify the Agent Threads configured root resolves to this exact target and the source hash above is still current. The host validates the full YAML before mutation; this export performs conservative manifest checks only. Only SKILL.md changes; omitted scripts, references and assets are preserved. This export does not execute the tool.\n\n\`\`\`json\n${JSON.stringify(payload,null,2)}\n\`\`\`\n`:'\n\n## Maintained-source review\n\nNo eligible local update payload. Review or prepare a repository PR for the maintained source; do not apply automatically.\n';
+      await this.put(`${root}/approved/${segment(candidate.id)}.md`, `<!-- wikiskill-generated -->\n# Approved proposal: ${candidate.skill}\n\n${candidate.verification ?? 'Unverified'}\n\nSource hash: ${candidate.sourceHash ?? 'new guidance'}\n\nEvidence sources: ${(candidate.sourceEvidence??[]).map(e=>e.path+' ('+e.hash+')').join(', ')}\n\n${candidate.rationale ?? ''}\n\n## Proposed content (not activated)\n\n${candidate.content}${handoff}`);
     }
   }
   private async put(path: string, content: string): Promise<void> {

@@ -4,8 +4,11 @@ import { join } from 'node:path';
 import type { Evidence, Pattern } from './model';
 import type { PluginState } from './state';
 import { redactTrace } from './privacy';
+import { resolveAttribution } from './local-integration';
 export const hash = (text: string): string => createHash('sha256').update(text).digest('hex');
 export interface InstalledSkill {
+    localSkillId?: string;
+    vaultPackagePath?: string;
     id: string;
     name: string;
     path: string;
@@ -81,7 +84,7 @@ export async function scanDocuments(state: PluginState, files: Array<{
     size: number;
 }>, read: (path: string) => Promise<string>, secrets: string[] = []): Promise<void> {
     state.vaultScan.outputRoots = [...new Set([...state.vaultScan.outputRoots, state.settings.outputRoot])];
-    const excluded = [...state.vaultScan.outputRoots, ...state.settings.exclusions, '.geode', '.obsidian', '.git'];
+    const excluded = [...state.vaultScan.outputRoots, ...state.settings.exclusions, ...state.skills.flatMap(s=>s.vaultPackagePath?[s.vaultPackagePath]:[]), state.settings.authoredSkillFolder, '.agents', '.claude', '.codex', '.geode', '.obsidian', '.git'];
     const eligible = files.filter(f => !excluded.some(p => f.path === p || f.path.startsWith(p.replace(/\/$/, '') + '/')) && f.size <= 262144).sort((a, b) => a.path.localeCompare(b.path));
     const present = new Set(eligible.map(f => f.path));
     state.evidence = state.evidence.filter(e => !e.sourcePath || present.has(e.sourcePath));
@@ -115,7 +118,8 @@ export async function scanDocuments(state: PluginState, files: Array<{
                     const success = /\b(success(?:ful(?:ly)?)?|worked|resolved)\b/i.test(text) && !/\b(failed|error|incorrect)\b/i.test(text);
                     if (!failure && !success)
                         continue;
-                    const matched = state.skills.filter(s => new RegExp(`\\b${s.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text));
+                    const qualified=[...new Set(text.match(/\blocal:([a-z0-9]+(?:-[a-z0-9]+)*)\b/g)??[])];
+                    const matched = qualified.length ? qualified.flatMap(name=>{const skill=resolveAttribution(name,state.skills);return skill?[skill]:[];}) : state.skills.filter(s => new RegExp(`\\b${s.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(text));
                     state.evidence.push({ id: `vault-${hash(file.path + ':' + line).slice(0, 24)}`, skill: matched.length === 1 ? matched[0]!.id : 'unmapped', action: text.slice(0, 2000), outcome: success ? 'success' : 'failure', sourcePath: file.path, sourceLine: line + 1, sourceHash: digest, inferred: true, importedAt: new Date().toISOString() });
                 }
             state.vaultScan.hashes[file.path] = digest;

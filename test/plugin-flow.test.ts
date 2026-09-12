@@ -63,7 +63,7 @@ describe('installed plugin learning flow', () => {
     });
     it('retains local scanning when the execution provider is missing',async()=>{
         vi.stubGlobal('window',{setInterval:()=>1});
-        const file={path:'friction.md',stat:{size:40}};
+        const file={path:'friction.md',size:40};
         const app={vault:{adapter:{},getMarkdownFiles:()=>[file],read:async()=> 'A repeated network timeout failed'},workspace:{on:()=>({}),getLeavesOfType:()=>[]}};
         const plugin=new WikiSkillPlugin(app as never,{} as never);await plugin.onload();
         vi.spyOn(plugin,'discover').mockResolvedValue();

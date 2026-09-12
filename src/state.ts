@@ -1,5 +1,6 @@
 import type { Candidate, EvaluationRecord, Evidence, Pattern } from "./model";
 import type { InstalledSkill } from "./learning";
+import { validAuthoredFolder } from './local-integration';
 export const STATE_SCHEMA_VERSION = 4;
 export interface PluginState {
     skills: InstalledSkill[];
@@ -64,6 +65,7 @@ export interface PluginState {
         usedTokens: number;
     };
     settings: {
+        authoredSkillFolder: string;
         scenarioJson: string;
         skillRoots: string[];
         exclusions: string[];
@@ -97,6 +99,7 @@ export function defaultState(): PluginState {
         },
         budget: { utcDay: "", usedTokens: 0 },
         settings: {
+            authoredSkillFolder: 'Skills',
             scenarioJson: '',
             skillRoots: [],
             exclusions: [],
@@ -164,6 +167,7 @@ function sanitizeSettings(value: unknown, base: PluginState["settings"]): Plugin
         : {};
     return {
         scenarioJson: typeof v.scenarioJson === 'string' ? v.scenarioJson : '',
+        authoredSkillFolder: typeof v.authoredSkillFolder==='string'&&validAuthoredFolder(v.authoredSkillFolder)?v.authoredSkillFolder:'Skills',
         skillRoots: strings(v.skillRoots) ? v.skillRoots : [],
         exclusions: strings(v.exclusions) ? v.exclusions : [],
         scheduledScan: v.scheduledScan === true,

@@ -12,6 +12,8 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { evaluateScenarios, parseScenarios } from './scenarios';
 import { redactTrace } from './privacy';
+import { classifyVaultSkills, resolveAttribution, validAuthoredFolder } from './local-integration';
+import { realpath } from 'node:fs/promises';
 const VIEW_TYPE = "geode-wikiskill:dashboard";
 interface WorkspaceExternalEvents {
     on(name: string, callback: () => void): EventRef;
@@ -195,19 +197,23 @@ export default class WikiSkillPlugin extends Plugin {
         const adapter = this.app.vault.adapter as unknown as {
             getBasePath?(): string;
         };
-        const vault = adapter.getBasePath?.();
+        const base = adapter.getBasePath?.();
+        const vault = base ? await realpath(base) : undefined;
+        if(!validAuthoredFolder(this.state.settings.authoredSkillFolder)) throw new Error('Authored skills folder must be a contained visible vault folder');
         const roots = [
             ...['.agents/skills', '.claude/skills', '.codex/skills'].map(p => join(homedir(), p)),
             ...(vault ? ['.agents/skills', '.claude/skills', '.codex/skills', this.app.vault.configDir + '/plugins/claude-threads/skills', this.app.vault.configDir + '/plugins/claude-threads/skill-sources'].map(p => join(vault, p)) : []),
             ...this.state.settings.skillRoots,
+            ...(vault?[join(vault,this.state.settings.authoredSkillFolder)]:[]),
         ];
         this.state.skills = await discoverSkills([...new Set(roots)], undefined, this.redactionSecrets());
+        if(vault) this.state.skills=classifyVaultSkills(this.state.skills,vault,this.state.settings.authoredSkillFolder);
     }
     async scanVault(): Promise<void> {
         await this.scopeLock.run('vault-scan', async () => {
             await this.discover();
             const files = this.app.vault.getMarkdownFiles();
-            await scanDocuments(this.state, files.map(f => ({ path: f.path, size: f.stat.size })), async (path) => {
+            await scanDocuments(this.state, files.map(f => ({ path: f.path, size: f.stat?.size ?? (f as unknown as {size?:number}).size ?? Infinity })), async (path) => {
                 const file = files.find(f => f.path === path);
                 if (!file)
                     throw new Error('Source disappeared during scan');
@@ -238,17 +244,16 @@ export default class WikiSkillPlugin extends Plugin {
     async propose(): Promise<void> {
         try {
             await this.discover();
-            const signature = (p: import('./model').Pattern) => hash(JSON.stringify({ evidence: this.state.evidence.filter(e => [...p.evidence, ...p.counterexamples].includes(e.id)).map(e => ({ id: e.id, action: e.action, sourceHash: e.sourceHash, outcome: e.outcome })), source: this.state.skills.find(s => s.id === p.skill)?.hash }));
+            const signature = (p: import('./model').Pattern) => hash(JSON.stringify({ evidence: this.state.evidence.filter(e => [...p.evidence, ...p.counterexamples].includes(e.id)).map(e => ({ id: e.id, action: e.action, sourceHash: e.sourceHash, outcome: e.outcome })), source: resolveAttribution(p.skill,this.state.skills)?.hash }));
             const pattern = this.state.patterns.find(p => !this.state.candidates.some(c => c.patternId === p.id && c.patternSignature === signature(p)));
             if (!pattern)
                 throw new Error('Scan evidence first; no new friction is awaiting a proposal');
             if (this.adapter.status !== 'full')
                 throw new Error('Agent Threads authoring is unavailable; local findings remain available');
-            const named = this.state.skills.filter(s => s.name === pattern.skill);
-            const skill = this.state.skills.find(s => s.id === pattern.skill) ?? (named.length===1?named[0]:undefined);
+            const skill = resolveAttribution(pattern.skill,this.state.skills);
             const ids = [...pattern.evidence, ...pattern.counterexamples];
             const evidence = this.state.evidence.filter(e => ids.includes(e.id));
-            const input = JSON.stringify({ instruction: skill ? 'Return the complete revised skill text and rationale. Preserve unrelated guidance.' : 'Propose missing guidance or a tooling investigation; do not assume a skill is at fault.', target: skill?.name ?? 'unmapped', baseline: skill?.content, evidence, uncertainty: 'Vault outcomes are inferred. Successes are possible counterevidence. Correlation is not causation.' });
+            const input = JSON.stringify({ instruction: skill ? 'Return the complete revised SKILL.md text and rationale. Preserve frontmatter name and description, unrelated guidance, and references to package resources. Scope is SKILL.md only; do not propose resource deletion.' : 'Propose missing guidance or a tooling investigation; do not assume a skill is at fault.', target: skill?.name ?? 'unmapped', baseline: skill?.content, evidence, uncertainty: 'Vault outcomes are inferred. Successes are possible counterevidence. Correlation is not causation.' });
             const result = await this.scheduler.run(pattern.skill, Math.ceil(Buffer.byteLength(input) / 3) + 4096, () => this.queue.propose(pattern.skill, input, undefined, 4096));
             if (!result.value)
                 throw new Error('Daily budget exhausted or operation already running');
@@ -448,6 +453,7 @@ class WikiSkillSettings extends PluginSettingTab {
             this.plugin.state.settings.outputRoot = path;
             await this.plugin.persist();
         }));
+        new Setting(this.containerEl).setName('Authored skills folder').setDesc('Vault-relative folder, default Skills. Match Agent Threads local skills folder if customized.').addText(text=>text.setValue(this.plugin.state.settings.authoredSkillFolder).onChange(async value=>{if(validAuthoredFolder(value)){this.plugin.state.settings.authoredSkillFolder=value;await this.plugin.persist();}}));
         new Setting(this.containerEl).setName('Additional skill directories').setDesc('Absolute directories, one per line. Conventional vault/home skill directories are discovered automatically.').addTextArea(text => text.setValue(this.plugin.state.settings.skillRoots.join('\n')).onChange(async (value) => { this.plugin.state.settings.skillRoots = value.split('\n').map(x => x.trim()).filter(Boolean); await this.plugin.persist(); }));
         new Setting(this.containerEl).setName('Excluded vault folders').setDesc('One vault-relative path per line. WikiSkill outputs are always excluded.').addTextArea(text => text.setValue(this.plugin.state.settings.exclusions.join('\n')).onChange(async (value) => { this.plugin.state.settings.exclusions = value.split('\n').map(x => x.trim()).filter(Boolean); await this.plugin.persist(); }));
         new Setting(this.containerEl).setName('Scan every 15 minutes').setDesc('Local incremental scans; proposals require a separate action.').addToggle(toggle => toggle.setValue(this.plugin.state.settings.scheduledScan).onChange(async (value) => { this.plugin.state.settings.scheduledScan = value; await this.plugin.persist(); }));

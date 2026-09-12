@@ -6,6 +6,8 @@ This work is based on [“WikiSkill: Compiling Agent Experience into Persistent 
 
 ## Getting started
 
+For the published v0.1.0 release, install BRAT and add `rbcodelabs/geode-wikiskill` as a beta plugin, then enable WikiSkill Evolution. Local scans work independently; install Agent Threads v0.38.0 or later for its local skill authoring workflow and model execution. Building from source remains available below.
+
 1. Build the plugin and install `dist/main.js`, `dist/manifest.json`, and `dist/styles.css` in your host's plugin directory. Enable WikiSkill Evolution.
 2. Check WikiSkill settings: exclude folders you do not want scanned and add any skill directories outside the conventional installation locations.
 3. Open the dashboard and scan the vault. WikiSkill discovers skills and reads a bounded batch of Markdown documents. Repeat scans advance through the vault and revisit changed documents.
@@ -18,6 +20,10 @@ Local scanning and skill discovery work without Agent Threads or any Agentic PM 
 ## Discovery and scanning
 
 WikiSkill discovers conventional home and vault skill directories and accepts additional directories in settings. It reads skills as they are; collections with the same skill name remain distinct by source identity. Discovery does not install, update, or delete skills. Additional directories are useful when a host's configured sources are not exposed through a public API or conventional installation location.
+
+Agent Threads v0.38.0 stores authored packages in the vault's `Skills` folder by default. WikiSkill discovers that folder automatically. If you customize it in Agent Threads, set the same vault-relative **Authored skills folder** in WikiSkill. Qualified `local:slug` attribution identifies the authored package; ambiguous unqualified names remain unresolved. Skill packages and their resources are excluded from friction scanning because instructions are not execution evidence.
+
+For an approved local SKILL.md improvement with matching frontmatter, export includes an inert `skills_update_local` payload. It changes only SKILL.md and preserves omitted scripts, references and assets. A separately authorized agent or human must verify the source hash and matching configured local folder before executing it. Other sources receive ordinary review material for their maintained repository. WikiSkill never invokes local mutation tools itself.
 
 Scanning is incremental and bounded. Folder exclusions are vault-relative paths, not glob patterns. WikiSkill excludes its own knowledge output and host configuration folders. Optional scheduled scanning runs every fifteen minutes; proposals are requested separately. Trace import requires consent for the relevant Agent Threads project IDs.
 
