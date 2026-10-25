@@ -18,6 +18,6 @@
     "jsdom": "^26.0.0",
     "obsidian": "^1.7.2",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.12"
   }
 }
